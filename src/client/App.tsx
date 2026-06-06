@@ -23,6 +23,7 @@ import {
   shouldInvertPiece,
 } from "./shogi-ui";
 import type {
+  BoardPiece,
   GameEvent,
   GameSnapshot,
   GameSummary,
@@ -243,6 +244,7 @@ function BoardArea() {
       <div class="board-grid" aria-label="将棋盤">
         {orderedBoardSquares(game, orientation).map((square) => {
           const selected = selectedSquare.value === square.square;
+          const label = boardSquareLabel(square.square, square.piece, selected);
           return (
             <button
               type="button"
@@ -250,7 +252,7 @@ function BoardArea() {
               class={selected ? "board-square selected" : "board-square"}
               onClick={() => void handleSquareClick(square.square)}
               disabled={busy.value || (!myTurn && !selectedSquare.value && !selectedHand.value)}
-              aria-label={square.square}
+              aria-label={label}
             >
               {square.piece ? (
                 <span class={shouldInvertPiece(square.piece, orientation) ? "piece inverted" : "piece"}>
@@ -297,7 +299,7 @@ function HandRow({
         <button
           type="button"
           key={piece.type}
-          class={selectedHand.value === piece.type ? "hand-piece active" : "hand-piece"}
+          class={ownHand && selectedHand.value === piece.type ? "hand-piece active" : "hand-piece"}
           disabled={busy.value || !ownHand || game.status !== "active" || game.currentTurn !== visibleColor}
           onClick={() => {
             selectedSquare.value = null;
@@ -619,6 +621,14 @@ function statusLabel(game: GameSnapshot): string {
     return `${game.winner.displayName} 勝ち`;
   }
   return "終局";
+}
+
+function boardSquareLabel(square: string, piece: BoardPiece | null, selected: boolean): string {
+  const selectedText = selected ? " 選択中" : "";
+  if (!piece) {
+    return `${square} 空き${selectedText}`;
+  }
+  return `${square} ${piece.color === "black" ? "先手" : "後手"} ${piece.label}${selectedText}`;
 }
 
 function connectionLabel(): string {
