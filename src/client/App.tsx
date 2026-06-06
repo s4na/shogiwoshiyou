@@ -251,7 +251,7 @@ function BoardArea() {
               key={square.square}
               class={selected ? "board-square selected" : "board-square"}
               onClick={() => void handleSquareClick(square.square)}
-              disabled={busy.value || (!myTurn && !selectedSquare.value && !selectedHand.value)}
+              disabled={busy.value || !myTurn}
               aria-label={label}
             >
               {square.piece ? (
@@ -396,7 +396,7 @@ async function refreshGames(): Promise<void> {
 async function handleCreateGame(): Promise<void> {
   await withBusy(async () => {
     const response = await createGame();
-    activeGame.value = response.game;
+    applyGameSnapshot(response.game);
     await refreshGames();
     connectRealtime(response.game.id);
   });
@@ -405,7 +405,7 @@ async function handleCreateGame(): Promise<void> {
 async function handleJoinGame(gameId: string): Promise<void> {
   await withBusy(async () => {
     const response = await joinGame(gameId);
-    activeGame.value = response.game;
+    applyGameSnapshot(response.game);
     await refreshGames();
     connectRealtime(gameId);
   });
@@ -414,7 +414,7 @@ async function handleJoinGame(gameId: string): Promise<void> {
 async function selectGame(gameId: string): Promise<void> {
   await withBusy(async () => {
     const response = await getGame(gameId);
-    activeGame.value = response.game;
+    applyGameSnapshot(response.game);
     selectedSquare.value = null;
     selectedHand.value = null;
     promotionChoice.value = null;
@@ -477,7 +477,7 @@ async function submitMove(usi: string): Promise<void> {
   }
   await withBusy(async () => {
     const response = await playMove(game.id, usi, crypto.randomUUID());
-    activeGame.value = response.game;
+    applyGameSnapshot(response.game);
     selectedSquare.value = null;
     selectedHand.value = null;
     promotionChoice.value = null;
@@ -489,7 +489,7 @@ async function submitMove(usi: string): Promise<void> {
 async function handleResign(gameId: string): Promise<void> {
   await withBusy(async () => {
     const response = await resignGame(gameId, crypto.randomUUID());
-    activeGame.value = response.game;
+    applyGameSnapshot(response.game);
     await refreshGames();
     await refreshEvents();
   });
@@ -519,7 +519,10 @@ function connectRealtime(gameId: string): void {
   ws.addEventListener("message", (event) => {
     const payload = JSON.parse(String(event.data)) as { type?: string; game?: GameSnapshot };
     if (payload.game) {
-      activeGame.value = payload.game;
+      if (socket !== ws || activeGame.value?.id !== gameId) {
+        return;
+      }
+      applyGameSnapshot(payload.game);
       void refreshGames();
       void refreshEvents();
     }
@@ -562,7 +565,10 @@ function startPolling(gameId: string): void {
     connection.value = "polling";
     void getGame(gameId)
       .then(async (response) => {
-        activeGame.value = response.game;
+        if (activeGame.value?.id !== gameId) {
+          return;
+        }
+        applyGameSnapshot(response.game);
         await refreshGames();
         await refreshEvents();
       })
@@ -586,6 +592,19 @@ function closeRealtime(): void {
   socket?.close();
   socket = null;
   connection.value = "idle";
+}
+
+function applyGameSnapshot(game: GameSnapshot): void {
+  activeGame.value = game;
+  if (!user.value) {
+    return;
+  }
+  const color = myColor(game, user.value.id);
+  if (!color || game.status !== "active" || game.currentTurn !== color) {
+    selectedSquare.value = null;
+    selectedHand.value = null;
+    promotionChoice.value = null;
+  }
 }
 
 async function withBusy(action: () => Promise<void>): Promise<void> {

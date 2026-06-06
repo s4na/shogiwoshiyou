@@ -7,14 +7,15 @@
     "build": "vite build",
     "check": "pnpm typecheck && pnpm lint && pnpm lint:ox && pnpm test && pnpm build",
     "cf-typegen": "wrangler types",
-    "deploy": "pnpm build && wrangler deploy",
+    "deploy": "pnpm verify:wrangler && pnpm build && wrangler deploy",
     "dev": "vite dev",
     "lint": "eslint .",
     "lint:ox": "oxlint .",
     "preview": "pnpm build && vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "verify:wrangler": "node scripts/check-wrangler-config.mjs"
   },
   "dependencies": {
     "@hono/zod-validator": "0.7.5",

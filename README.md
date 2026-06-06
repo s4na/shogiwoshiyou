@@ -22,7 +22,7 @@ Cloudflare Workers 上で動かす将棋対戦アプリ。
 - 切断時の WebSocket 再接続と軽い polling fallback
 
 メールアドレスは任意入力で、`users` には持たず `user_private_profiles` に分離して保存します。初期実装ではメール確認、確認メール、パスワードリセットメールは送りません。
-この PR では、メール送信なしで動作を確認しやすいように username/password の公開登録を有効にしています。公開運用で登録を制限したい場合は、招待制や管理者作成に切り替えてから deploy してください。
+この初期実装では、メール送信なしで動作を確認しやすいように username/password の公開登録を有効にしています。公開運用で登録を制限したい場合は、招待制や管理者作成に切り替えてから deploy してください。
 募集中の対局はログイン済みユーザーが参加できる公開募集として扱います。招待制にしたい場合は、招待 token や参加許可ユーザーの管理を追加してください。
 
 初期実装の終局操作は投了のみです。合法手検証は行いますが、詰みや千日手などの自動終局判定は今後の拡張対象です。
@@ -60,6 +60,7 @@ pnpm exec wrangler d1 create shogiwoshiyou
 ```
 
 作成された D1 `database_id` を `wrangler.jsonc` に設定します。
+`pnpm deploy` は placeholder の D1 ID が残っている場合に停止します。
 
 ```bash
 pnpm exec wrangler d1 migrations apply shogiwoshiyou --remote
