@@ -29,7 +29,12 @@ export function ensureSameOrigin(c: Context<AppEnv>): void {
     throw new HttpError(403, "missing_origin", "Originヘッダーが必要です。");
   }
   const requestUrl = new URL(c.req.url);
-  const originUrl = new URL(origin);
+  let originUrl: URL;
+  try {
+    originUrl = new URL(origin);
+  } catch {
+    throw new HttpError(403, "bad_origin", "別のOriginからの操作はできません。");
+  }
   if (originUrl.host !== requestUrl.host || originUrl.protocol !== requestUrl.protocol) {
     throw new HttpError(403, "bad_origin", "別のOriginからの操作はできません。");
   }
