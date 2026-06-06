@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "vite build",
-    "check": "pnpm lint && pnpm lint:ox && pnpm test && pnpm build",
+    "check": "pnpm typecheck && pnpm lint && pnpm lint:ox && pnpm test && pnpm build",
     "cf-typegen": "wrangler types",
     "deploy": "pnpm build && wrangler deploy",
     "dev": "vite dev",
@@ -13,7 +13,8 @@
     "lint:ox": "oxlint .",
     "preview": "pnpm build && vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@hono/zod-validator": "0.7.5",

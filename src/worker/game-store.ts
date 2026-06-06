@@ -62,7 +62,7 @@ export async function listGameSummariesForUser(
               COALESCE(MAX(e.seq), 0) AS last_event_seq
        FROM games g
        LEFT JOIN game_events e ON e.game_id = g.id
-       WHERE g.status IN ('waiting', 'active')
+       WHERE g.status = 'waiting'
           OR g.black_user_id = ?1
           OR g.white_user_id = ?2
        GROUP BY g.id
@@ -81,6 +81,24 @@ export async function listGameSummariesForUser(
     ]),
   );
   return games.map((game) => summaryFromSnapshot(snapshotFromStoredGame(game, users)));
+}
+
+export async function canViewGame(
+  db: D1Database,
+  gameId: string,
+  userId: string,
+): Promise<boolean> {
+  const row = await db
+    .prepare(
+      `SELECT 1 AS allowed
+       FROM games
+       WHERE id = ?1
+         AND (black_user_id = ?2 OR white_user_id = ?3)
+       LIMIT 1`,
+    )
+    .bind(gameId, userId, userId)
+    .first<{ allowed: number }>();
+  return Boolean(row);
 }
 
 export async function loadGameEvents(

@@ -172,23 +172,30 @@ function GameList() {
       </button>
       <div class="game-list">
         {games.value.length === 0 ? <p class="empty">対局なし</p> : null}
-        {games.value.map((game) => (
-          <button
-            type="button"
-            key={game.id}
-            class={activeGame.value?.id === game.id ? "game-item active" : "game-item"}
-            onClick={() => void selectGame(game.id)}
-          >
-            <span class="game-main">
-              <strong>{game.players.black.displayName}</strong>
-              <span>対</span>
-              <strong>{game.players.white?.displayName ?? "募集中"}</strong>
-            </span>
-            <span class="game-sub">
-              {game.status === "waiting" ? "募集中" : game.status === "active" ? `${String(game.moves.length)}手` : "終局"}
-            </span>
-          </button>
-        ))}
+        {games.value.map((game) => {
+          const canJoinFromList =
+            user.value !== null &&
+            user.value !== undefined &&
+            game.status === "waiting" &&
+            game.players.black.id !== user.value.id;
+          return (
+            <button
+              type="button"
+              key={game.id}
+              class={activeGame.value?.id === game.id ? "game-item active" : "game-item"}
+              onClick={() => void (canJoinFromList ? handleJoinGame(game.id) : selectGame(game.id))}
+            >
+              <span class="game-main">
+                <strong>{game.players.black.displayName}</strong>
+                <span>対</span>
+                <strong>{game.players.white?.displayName ?? "募集中"}</strong>
+              </span>
+              <span class="game-sub">
+                {game.status === "waiting" ? "募集中" : game.status === "active" ? `${String(game.moves.length)}手` : "終局"}
+              </span>
+            </button>
+          );
+        })}
       </div>
     </aside>
   );
@@ -225,7 +232,7 @@ function BoardArea() {
               参加
             </button>
           ) : null}
-          {color && game.status !== "ended" ? (
+          {color && game.status === "active" ? (
             <button type="button" class="danger-button" onClick={() => void handleResign(game.id)} disabled={busy.value}>
               投了
             </button>
@@ -242,7 +249,7 @@ function BoardArea() {
               key={square.square}
               class={selected ? "board-square selected" : "board-square"}
               onClick={() => void handleSquareClick(square.square)}
-              disabled={!myTurn && !selectedSquare.value && !selectedHand.value}
+              disabled={busy.value || (!myTurn && !selectedSquare.value && !selectedHand.value)}
               aria-label={square.square}
             >
               {square.piece ? (
@@ -258,10 +265,10 @@ function BoardArea() {
       {choice ? (
         <div class="promotion-bar">
           <span>成りますか</span>
-          <button type="button" onClick={() => void submitMove(choice.promotedUsi)}>
+          <button type="button" onClick={() => void submitMove(choice.promotedUsi)} disabled={busy.value}>
             成る
           </button>
-          <button type="button" onClick={() => void submitMove(choice.baseUsi)}>
+          <button type="button" onClick={() => void submitMove(choice.baseUsi)} disabled={busy.value}>
             不成
           </button>
         </div>
@@ -291,7 +298,7 @@ function HandRow({
           type="button"
           key={piece.type}
           class={selectedHand.value === piece.type ? "hand-piece active" : "hand-piece"}
-          disabled={!ownHand || game.status !== "active" || game.currentTurn !== visibleColor}
+          disabled={busy.value || !ownHand || game.status !== "active" || game.currentTurn !== visibleColor}
           onClick={() => {
             selectedSquare.value = null;
             selectedHand.value = selectedHand.value === piece.type ? null : piece.type;
@@ -419,6 +426,9 @@ async function handleSquareClick(square: string): Promise<void> {
   if (!game || !user.value) {
     return;
   }
+  if (busy.value) {
+    return;
+  }
   const color = myColor(game, user.value.id);
   if (!color || game.status !== "active" || game.currentTurn !== color) {
     return;
@@ -460,6 +470,9 @@ async function submitMove(usi: string): Promise<void> {
   if (!game) {
     return;
   }
+  if (busy.value) {
+    return;
+  }
   await withBusy(async () => {
     const response = await playMove(game.id, usi, crypto.randomUUID());
     activeGame.value = response.game;
@@ -486,7 +499,7 @@ async function refreshEvents(): Promise<void> {
     events.value = [];
     return;
   }
-  const response = await getGameEvents(game.id, 0);
+  const response = await getGameEvents(game.id, Math.max(0, game.lastEventSeq - 100));
   events.value = response.events;
 }
 

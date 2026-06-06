@@ -38,7 +38,7 @@ pnpm dev
 検査:
 
 ```bash
-pnpm exec tsc --noEmit
+pnpm typecheck
 pnpm lint
 pnpm lint:ox
 pnpm test

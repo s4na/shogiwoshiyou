@@ -6,7 +6,7 @@ import type { GamesResponse, SessionPayload } from "../shared/types";
 import { authMiddleware, currentSession, login, logout, register } from "./auth";
 import type { AppEnv, Env } from "./env";
 import { GameRoom } from "./game-room";
-import { loadGameEvents, listGameSummariesForUser } from "./game-store";
+import { canViewGame, loadGameEvents, listGameSummariesForUser } from "./game-store";
 import { apiError, ensureSameOrigin, HttpError } from "./http";
 
 export { GameRoom };
@@ -125,6 +125,9 @@ app.post("/api/games/:id/resign", zValidator("json", resignSchema), async (c) =>
 
 app.get("/api/games/:id/events", async (c) => {
   const gameId = validGameId(c.req.param("id"));
+  if (!(await canViewGame(c.env.DB, gameId, c.get("user").id))) {
+    throw new HttpError(403, "not_player", "対局者ではありません。");
+  }
   const after = Number(c.req.query("after") ?? "0");
   if (!Number.isInteger(after) || after < 0) {
     throw new HttpError(400, "bad_after", "after は0以上の整数で指定してください。");

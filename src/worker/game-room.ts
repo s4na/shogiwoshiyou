@@ -57,10 +57,11 @@ export class GameRoom implements DurableObject {
         if (!game) {
           return jsonError(404, "game_not_found", "対局が見つかりません。");
         }
+        this.ensureCanViewGame(game, userId);
         return await this.snapshotResponse(game);
       }
       if (url.pathname === "/ws" && request.method === "GET") {
-        return await this.connectWebSocket();
+        return await this.connectWebSocket(userId);
       }
       return jsonError(404, "not_found", "ルートが見つかりません。");
     } catch (error) {
@@ -191,6 +192,9 @@ export class GameRoom implements DurableObject {
     if (game.status === "ended") {
       return this.snapshotResponse(game);
     }
+    if (game.status !== "active") {
+      throw new RoomError(409, "game_not_active", "対局中ではありません。");
+    }
     const now = new Date().toISOString();
     const winnerUserId = opponentUserId(game, userId);
     const next: StoredGame = {
@@ -274,8 +278,9 @@ export class GameRoom implements DurableObject {
     return { game: snapshotFromStoredGame(game, users) };
   }
 
-  private async connectWebSocket(): Promise<Response> {
+  private async connectWebSocket(userId: string): Promise<Response> {
     const game = await this.requireGame();
+    this.ensureCanViewGame(game, userId);
     const pair = new WebSocketPair();
     const client = pair[0];
     const server = pair[1];
@@ -287,6 +292,12 @@ export class GameRoom implements DurableObject {
       }),
     );
     return new Response(null, { status: 101, webSocket: client });
+  }
+
+  private ensureCanViewGame(game: StoredGame, userId: string): void {
+    if (!playerColorForUser(game, userId)) {
+      throw new RoomError(403, "not_player", "対局者ではありません。");
+    }
   }
 
   private async broadcast(game: StoredGame): Promise<void> {
