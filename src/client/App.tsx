@@ -1,0 +1,624 @@
+import { computed, signal } from "@preact/signals";
+import { useEffect } from "preact/hooks";
+
+import {
+  ApiClientError,
+  createGame,
+  getGame,
+  getGameEvents,
+  getSession,
+  joinGame,
+  listGames,
+  loginAccount,
+  logoutAccount,
+  playMove,
+  registerAccount,
+  resignGame,
+} from "./api";
+import {
+  dropUsi,
+  myColor,
+  orderedBoardSquares,
+  promotionMoveOptions,
+  shouldInvertPiece,
+} from "./shogi-ui";
+import type {
+  GameEvent,
+  GameSnapshot,
+  GameSummary,
+  HandPieceType,
+  PlayerColor,
+  UserSummary,
+} from "../shared/types";
+
+const user = signal<UserSummary | null | undefined>(undefined);
+const games = signal<GameSummary[]>([]);
+const activeGame = signal<GameSnapshot | null>(null);
+const events = signal<GameEvent[]>([]);
+const selectedSquare = signal<string | null>(null);
+const selectedHand = signal<HandPieceType | null>(null);
+const promotionChoice = signal<{ baseUsi: string; promotedUsi: string } | null>(null);
+const notice = signal<string | null>(null);
+const busy = signal(false);
+const connection = signal<"idle" | "connecting" | "live" | "reconnecting" | "polling">("idle");
+const authMode = signal<"register" | "login">("register");
+
+const signedIn = computed(() => user.value !== null && user.value !== undefined);
+
+let socket: WebSocket | null = null;
+let reconnectTimer: number | null = null;
+let pollingTimer: number | null = null;
+let reconnectAttempts = 0;
+
+export function App() {
+  useEffect(() => {
+    void bootstrap();
+    return () => {
+      closeRealtime();
+    };
+  }, []);
+
+  if (user.value === undefined) {
+    return <main class="app-shell loading">読み込み中</main>;
+  }
+
+  return (
+    <main class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">workers.dev free start</p>
+          <h1>将棋をしよう</h1>
+        </div>
+        <SessionArea />
+      </header>
+      {!signedIn.value ? (
+        <AuthPanel />
+      ) : (
+        <section class="play-layout">
+          <GameList />
+          <BoardArea />
+          <HistoryPanel />
+        </section>
+      )}
+      {notice.value ? <div class="toast">{notice.value}</div> : null}
+    </main>
+  );
+}
+
+function SessionArea() {
+  if (!user.value) {
+    return <span class="session-chip">未ログイン</span>;
+  }
+  return (
+    <div class="session-area">
+      <span class="session-chip">{user.value.displayName}</span>
+      <button type="button" class="ghost-button" onClick={() => void handleLogout()}>
+        ログアウト
+      </button>
+    </div>
+  );
+}
+
+function AuthPanel() {
+  return (
+    <section class="auth-panel">
+      <div class="segmented">
+        <button
+          type="button"
+          class={authMode.value === "register" ? "active" : ""}
+          onClick={() => {
+            authMode.value = "register";
+          }}
+        >
+          登録
+        </button>
+        <button
+          type="button"
+          class={authMode.value === "login" ? "active" : ""}
+          onClick={() => {
+            authMode.value = "login";
+          }}
+        >
+          ログイン
+        </button>
+      </div>
+      <form class="auth-form" onSubmit={(event) => void submitAuth(event)}>
+        <label>
+          <span>ハンドル</span>
+          <input name="handle" autocomplete="username" required minlength={3} maxlength={24} />
+        </label>
+        {authMode.value === "register" ? (
+          <label>
+            <span>表示名</span>
+            <input name="displayName" required maxlength={32} />
+          </label>
+        ) : null}
+        <label>
+          <span>パスワード</span>
+          <input
+            name="password"
+            type="password"
+            autocomplete={authMode.value === "register" ? "new-password" : "current-password"}
+            required
+            minlength={8}
+            maxlength={128}
+          />
+        </label>
+        {authMode.value === "register" ? (
+          <label>
+            <span>メール</span>
+            <input name="email" type="email" autocomplete="email" />
+          </label>
+        ) : null}
+        <button type="submit" disabled={busy.value}>
+          {authMode.value === "register" ? "登録して始める" : "ログイン"}
+        </button>
+      </form>
+    </section>
+  );
+}
+
+function GameList() {
+  return (
+    <aside class="side-panel">
+      <div class="panel-heading">
+        <h2>対局</h2>
+        <button type="button" onClick={() => void refreshGames()} disabled={busy.value}>
+          更新
+        </button>
+      </div>
+      <button type="button" class="primary-action" onClick={() => void handleCreateGame()} disabled={busy.value}>
+        新しい対局
+      </button>
+      <div class="game-list">
+        {games.value.length === 0 ? <p class="empty">対局なし</p> : null}
+        {games.value.map((game) => (
+          <button
+            type="button"
+            key={game.id}
+            class={activeGame.value?.id === game.id ? "game-item active" : "game-item"}
+            onClick={() => void selectGame(game.id)}
+          >
+            <span class="game-main">
+              <strong>{game.players.black.displayName}</strong>
+              <span>対</span>
+              <strong>{game.players.white?.displayName ?? "募集中"}</strong>
+            </span>
+            <span class="game-sub">
+              {game.status === "waiting" ? "募集中" : game.status === "active" ? `${String(game.moves.length)}手` : "終局"}
+            </span>
+          </button>
+        ))}
+      </div>
+    </aside>
+  );
+}
+
+function BoardArea() {
+  const game = activeGame.value;
+  if (!game || !user.value) {
+    return (
+      <section class="board-panel placeholder">
+        <p>対局を選択</p>
+      </section>
+    );
+  }
+  const color = myColor(game, user.value.id);
+  const orientation = color ?? "black";
+  const canJoin = game.status === "waiting" && game.players.black.id !== user.value.id;
+  const myTurn = color !== null && game.status === "active" && game.currentTurn === color;
+  const choice = promotionChoice.value;
+
+  return (
+    <section class="board-panel">
+      <div class="game-toolbar">
+        <div>
+          <span class="status-pill">{statusLabel(game)}</span>
+          <h2>
+            {game.players.black.displayName} 対 {game.players.white?.displayName ?? "募集中"}
+          </h2>
+        </div>
+        <div class="toolbar-actions">
+          <span class={`connection ${connection.value}`}>{connectionLabel()}</span>
+          {canJoin ? (
+            <button type="button" onClick={() => void handleJoinGame(game.id)} disabled={busy.value}>
+              参加
+            </button>
+          ) : null}
+          {color && game.status !== "ended" ? (
+            <button type="button" class="danger-button" onClick={() => void handleResign(game.id)} disabled={busy.value}>
+              投了
+            </button>
+          ) : null}
+        </div>
+      </div>
+      <HandRow game={game} color="white" orientation={orientation} />
+      <div class="board-grid" aria-label="将棋盤">
+        {orderedBoardSquares(game, orientation).map((square) => {
+          const selected = selectedSquare.value === square.square;
+          return (
+            <button
+              type="button"
+              key={square.square}
+              class={selected ? "board-square selected" : "board-square"}
+              onClick={() => void handleSquareClick(square.square)}
+              disabled={!myTurn && !selectedSquare.value && !selectedHand.value}
+              aria-label={square.square}
+            >
+              {square.piece ? (
+                <span class={shouldInvertPiece(square.piece, orientation) ? "piece inverted" : "piece"}>
+                  {square.piece.label}
+                </span>
+              ) : null}
+            </button>
+          );
+        })}
+      </div>
+      <HandRow game={game} color="black" orientation={orientation} />
+      {choice ? (
+        <div class="promotion-bar">
+          <span>成りますか</span>
+          <button type="button" onClick={() => void submitMove(choice.promotedUsi)}>
+            成る
+          </button>
+          <button type="button" onClick={() => void submitMove(choice.baseUsi)}>
+            不成
+          </button>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function HandRow({
+  game,
+  color,
+  orientation,
+}: {
+  game: GameSnapshot;
+  color: PlayerColor;
+  orientation: PlayerColor;
+}) {
+  const visibleColor = orientation === "black" ? color : color === "black" ? "white" : "black";
+  const pieces = game.hands[visibleColor];
+  const ownHand = user.value ? myColor(game, user.value.id) === visibleColor : false;
+  return (
+    <div class={`hand-row ${visibleColor}`}>
+      <span class="hand-label">{visibleColor === "black" ? "先手" : "後手"}</span>
+      {pieces.length === 0 ? <span class="hand-empty">なし</span> : null}
+      {pieces.map((piece) => (
+        <button
+          type="button"
+          key={piece.type}
+          class={selectedHand.value === piece.type ? "hand-piece active" : "hand-piece"}
+          disabled={!ownHand || game.status !== "active" || game.currentTurn !== visibleColor}
+          onClick={() => {
+            selectedSquare.value = null;
+            selectedHand.value = selectedHand.value === piece.type ? null : piece.type;
+          }}
+        >
+          {piece.label}
+          <span>{piece.count}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function HistoryPanel() {
+  const game = activeGame.value;
+  return (
+    <aside class="side-panel history-panel">
+      <div class="panel-heading">
+        <h2>履歴</h2>
+        {game ? <span>{game.moves.length}手</span> : null}
+      </div>
+      {!game ? <p class="empty">対局未選択</p> : null}
+      {game ? (
+        <ol class="move-list">
+          {game.moves.map((move) => (
+            <li key={move.ply}>
+              <span>{move.ply}</span>
+              <code>{move.usi}</code>
+            </li>
+          ))}
+        </ol>
+      ) : null}
+      {events.value.length > 0 ? (
+        <div class="event-list">
+          {events.value.slice(-6).map((event) => (
+            <p key={event.id}>
+              <span>{event.seq}</span>
+              {event.type}
+            </p>
+          ))}
+        </div>
+      ) : null}
+    </aside>
+  );
+}
+
+async function bootstrap(): Promise<void> {
+  try {
+    const session = await getSession();
+    user.value = session.user;
+    if (session.user) {
+      await refreshGames();
+    }
+  } catch (error) {
+    showError(error);
+    user.value = null;
+  }
+}
+
+async function submitAuth(event: SubmitEvent): Promise<void> {
+  event.preventDefault();
+  const form = new FormData(event.currentTarget as HTMLFormElement);
+  const input = Object.fromEntries(form.entries());
+  await withBusy(async () => {
+    const session =
+      authMode.value === "register"
+        ? await registerAccount(input)
+        : await loginAccount(input);
+    user.value = session.user;
+    await refreshGames();
+  });
+}
+
+async function handleLogout(): Promise<void> {
+  await withBusy(async () => {
+    await logoutAccount();
+    user.value = null;
+    games.value = [];
+    activeGame.value = null;
+    events.value = [];
+    closeRealtime();
+  });
+}
+
+async function refreshGames(): Promise<void> {
+  if (!user.value) {
+    return;
+  }
+  const response = await listGames();
+  games.value = response.games;
+}
+
+async function handleCreateGame(): Promise<void> {
+  await withBusy(async () => {
+    const response = await createGame();
+    activeGame.value = response.game;
+    await refreshGames();
+    connectRealtime(response.game.id);
+  });
+}
+
+async function handleJoinGame(gameId: string): Promise<void> {
+  await withBusy(async () => {
+    const response = await joinGame(gameId);
+    activeGame.value = response.game;
+    await refreshGames();
+    connectRealtime(gameId);
+  });
+}
+
+async function selectGame(gameId: string): Promise<void> {
+  await withBusy(async () => {
+    const response = await getGame(gameId);
+    activeGame.value = response.game;
+    selectedSquare.value = null;
+    selectedHand.value = null;
+    promotionChoice.value = null;
+    await refreshEvents();
+    connectRealtime(gameId);
+  });
+}
+
+async function handleSquareClick(square: string): Promise<void> {
+  const game = activeGame.value;
+  if (!game || !user.value) {
+    return;
+  }
+  const color = myColor(game, user.value.id);
+  if (!color || game.status !== "active" || game.currentTurn !== color) {
+    return;
+  }
+  promotionChoice.value = null;
+  if (selectedHand.value) {
+    await submitMove(dropUsi(selectedHand.value, square));
+    return;
+  }
+  if (!selectedSquare.value) {
+    const boardSquare = game.board.find((candidate) => candidate.square === square);
+    if (boardSquare?.piece?.color === color) {
+      selectedSquare.value = square;
+    }
+    return;
+  }
+  const from = selectedSquare.value;
+  if (from === square) {
+    selectedSquare.value = null;
+    return;
+  }
+  const options = promotionMoveOptions(game, from, square);
+  if (options.mustPromote) {
+    await submitMove(options.promotedUsi);
+    return;
+  }
+  if (options.canPromote) {
+    promotionChoice.value = {
+      baseUsi: options.baseUsi,
+      promotedUsi: options.promotedUsi,
+    };
+    return;
+  }
+  await submitMove(options.baseUsi);
+}
+
+async function submitMove(usi: string): Promise<void> {
+  const game = activeGame.value;
+  if (!game) {
+    return;
+  }
+  await withBusy(async () => {
+    const response = await playMove(game.id, usi, crypto.randomUUID());
+    activeGame.value = response.game;
+    selectedSquare.value = null;
+    selectedHand.value = null;
+    promotionChoice.value = null;
+    await refreshGames();
+    await refreshEvents();
+  });
+}
+
+async function handleResign(gameId: string): Promise<void> {
+  await withBusy(async () => {
+    const response = await resignGame(gameId, crypto.randomUUID());
+    activeGame.value = response.game;
+    await refreshGames();
+    await refreshEvents();
+  });
+}
+
+async function refreshEvents(): Promise<void> {
+  const game = activeGame.value;
+  if (!game) {
+    events.value = [];
+    return;
+  }
+  const response = await getGameEvents(game.id, 0);
+  events.value = response.events;
+}
+
+function connectRealtime(gameId: string): void {
+  closeRealtime();
+  connection.value = "connecting";
+  const protocol = window.location.protocol === "https:" ? "wss" : "ws";
+  const ws = new WebSocket(`${protocol}://${window.location.host}/api/games/${gameId}/ws`);
+  socket = ws;
+  ws.addEventListener("open", () => {
+    reconnectAttempts = 0;
+    connection.value = "live";
+    stopPolling();
+  });
+  ws.addEventListener("message", (event) => {
+    const payload = JSON.parse(String(event.data)) as { type?: string; game?: GameSnapshot };
+    if (payload.game) {
+      activeGame.value = payload.game;
+      void refreshGames();
+      void refreshEvents();
+    }
+  });
+  ws.addEventListener("close", () => {
+    if (socket === ws) {
+      scheduleReconnect(gameId);
+    }
+  });
+  ws.addEventListener("error", () => {
+    connection.value = "reconnecting";
+  });
+}
+
+function scheduleReconnect(gameId: string): void {
+  if (activeGame.value?.id !== gameId) {
+    return;
+  }
+  connection.value = "reconnecting";
+  startPolling(gameId);
+  if (reconnectTimer !== null) {
+    window.clearTimeout(reconnectTimer);
+  }
+  const delay = Math.min(5000, 600 * 2 ** reconnectAttempts);
+  reconnectAttempts += 1;
+  reconnectTimer = window.setTimeout(() => {
+    connectRealtime(gameId);
+  }, delay);
+}
+
+function startPolling(gameId: string): void {
+  if (pollingTimer !== null) {
+    return;
+  }
+  pollingTimer = window.setInterval(() => {
+    if (activeGame.value?.id !== gameId) {
+      stopPolling();
+      return;
+    }
+    connection.value = "polling";
+    void getGame(gameId)
+      .then((response) => {
+        activeGame.value = response.game;
+      })
+      .catch(showError);
+  }, 5000);
+}
+
+function stopPolling(): void {
+  if (pollingTimer !== null) {
+    window.clearInterval(pollingTimer);
+    pollingTimer = null;
+  }
+}
+
+function closeRealtime(): void {
+  if (reconnectTimer !== null) {
+    window.clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+  stopPolling();
+  socket?.close();
+  socket = null;
+  connection.value = "idle";
+}
+
+async function withBusy(action: () => Promise<void>): Promise<void> {
+  busy.value = true;
+  notice.value = null;
+  try {
+    await action();
+  } catch (error) {
+    showError(error);
+  } finally {
+    busy.value = false;
+  }
+}
+
+function showError(error: unknown): void {
+  if (error instanceof ApiClientError) {
+    notice.value = error.message;
+    return;
+  }
+  if (error instanceof Error) {
+    notice.value = error.message;
+    return;
+  }
+  notice.value = "処理に失敗しました。";
+}
+
+function statusLabel(game: GameSnapshot): string {
+  if (game.status === "waiting") {
+    return "募集中";
+  }
+  if (game.status === "active") {
+    return game.currentTurn === "black" ? "先手番" : "後手番";
+  }
+  if (game.winner) {
+    return `${game.winner.displayName} 勝ち`;
+  }
+  return "終局";
+}
+
+function connectionLabel(): string {
+  switch (connection.value) {
+    case "connecting":
+      return "接続中";
+    case "live":
+      return "接続";
+    case "reconnecting":
+      return "再接続";
+    case "polling":
+      return "同期";
+    case "idle":
+      return "待機";
+  }
+}

@@ -1,0 +1,196 @@
+import { deleteCookie, getCookie, setCookie } from "hono/cookie";
+import type { Context, MiddlewareHandler } from "hono";
+
+import type { SessionPayload, UserSummary } from "../shared/types";
+import { constantTimeEqual, hashPassword, PASSWORD_ITERATIONS, randomToken, sha256Base64Url } from "./crypto";
+import type { AppEnv, Env } from "./env";
+import { HttpError } from "./http";
+
+const SESSION_DAYS = 30;
+const COOKIE_DEFAULT = "shogiwoshiyou_session";
+
+export type RegisterInput = {
+  handle: string;
+  displayName: string;
+  password: string;
+  email?: string | undefined;
+};
+
+export type LoginInput = {
+  handle: string;
+  password: string;
+};
+
+type UserRow = {
+  id: string;
+  handle: string;
+  display_name: string;
+};
+
+type CredentialRow = {
+  user_id: string;
+  password_salt: string;
+  password_hash: string;
+  password_iterations: number;
+};
+
+export function sessionCookieName(env: Env): string {
+  return env.SESSION_COOKIE_NAME ?? COOKIE_DEFAULT;
+}
+
+export function authMiddleware(): MiddlewareHandler<AppEnv> {
+  return async (c, next) => {
+    const user = await currentUser(c);
+    if (!user) {
+      throw new HttpError(401, "unauthorized", "ログインが必要です。");
+    }
+    c.set("user", user);
+    await next();
+  };
+}
+
+export async function currentSession(c: Context<AppEnv>): Promise<SessionPayload> {
+  return { user: await currentUser(c) };
+}
+
+export async function currentUser(c: Context<AppEnv>): Promise<UserSummary | null> {
+  const token = getCookie(c, sessionCookieName(c.env));
+  if (!token) {
+    return null;
+  }
+  const tokenHash = await sha256Base64Url(token);
+  const now = new Date().toISOString();
+  const row = await c.env.DB.prepare(
+    `SELECT users.id, users.handle, users.display_name
+     FROM sessions
+     JOIN users ON users.id = sessions.user_id
+     WHERE sessions.token_hash = ?1
+       AND sessions.expires_at > ?2
+       AND users.retired_at IS NULL`,
+  )
+    .bind(tokenHash, now)
+    .first<UserRow>();
+  if (!row) {
+    return null;
+  }
+  await c.env.DB.prepare("UPDATE sessions SET last_seen_at = ?1 WHERE token_hash = ?2")
+    .bind(now, tokenHash)
+    .run();
+  return toUserSummary(row);
+}
+
+export async function register(c: Context<AppEnv>, input: RegisterInput): Promise<UserSummary> {
+  const normalizedHandle = normalizeHandle(input.handle);
+  const now = new Date().toISOString();
+  const userId = crypto.randomUUID();
+  const salt = randomToken(18);
+  const passwordHash = await hashPassword(input.password, salt);
+
+  try {
+    await c.env.DB.batch([
+      c.env.DB.prepare(
+        `INSERT INTO users (id, handle, display_name, created_at)
+         VALUES (?1, ?2, ?3, ?4)`,
+      ).bind(userId, normalizedHandle, input.displayName.trim(), now),
+      c.env.DB.prepare(
+        `INSERT INTO user_private_profiles (user_id, email, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4)`,
+      ).bind(userId, normalizeEmail(input.email), now, now),
+      c.env.DB.prepare(
+        `INSERT INTO user_credentials
+         (user_id, password_salt, password_hash, password_iterations, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)`,
+      ).bind(userId, salt, passwordHash, PASSWORD_ITERATIONS, now, now),
+    ]);
+  } catch (error) {
+    if (String(error).includes("UNIQUE")) {
+      throw new HttpError(409, "handle_taken", "そのハンドルはすでに使われています。");
+    }
+    throw error;
+  }
+
+  const user = { id: userId, handle: normalizedHandle, displayName: input.displayName.trim() };
+  await createSession(c, user.id);
+  return user;
+}
+
+export async function login(c: Context<AppEnv>, input: LoginInput): Promise<UserSummary> {
+  const normalizedHandle = normalizeHandle(input.handle);
+  const row = await c.env.DB.prepare(
+    `SELECT users.id, users.handle, users.display_name,
+            user_credentials.password_salt,
+            user_credentials.password_hash,
+            user_credentials.password_iterations,
+            user_credentials.user_id
+     FROM users
+     JOIN user_credentials ON user_credentials.user_id = users.id
+     WHERE users.handle = ?1
+       AND users.retired_at IS NULL`,
+  )
+    .bind(normalizedHandle)
+    .first<UserRow & CredentialRow>();
+  if (!row) {
+    throw new HttpError(401, "bad_credentials", "ハンドルまたはパスワードが違います。");
+  }
+
+  const passwordHash = await hashPassword(
+    input.password,
+    row.password_salt,
+    row.password_iterations,
+  );
+  if (!constantTimeEqual(passwordHash, row.password_hash)) {
+    throw new HttpError(401, "bad_credentials", "ハンドルまたはパスワードが違います。");
+  }
+
+  await createSession(c, row.id);
+  return toUserSummary(row);
+}
+
+export async function logout(c: Context<AppEnv>): Promise<void> {
+  const token = getCookie(c, sessionCookieName(c.env));
+  if (token) {
+    const tokenHash = await sha256Base64Url(token);
+    await c.env.DB.prepare("DELETE FROM sessions WHERE token_hash = ?1").bind(tokenHash).run();
+  }
+  deleteCookie(c, sessionCookieName(c.env), { path: "/" });
+}
+
+async function createSession(c: Context<AppEnv>, userId: string): Promise<void> {
+  const token = randomToken();
+  const tokenHash = await sha256Base64Url(token);
+  const now = new Date();
+  const expires = new Date(now.getTime() + SESSION_DAYS * 24 * 60 * 60 * 1000);
+  await c.env.DB.prepare(
+    `INSERT INTO sessions (token_hash, user_id, expires_at, created_at, last_seen_at)
+     VALUES (?1, ?2, ?3, ?4, ?5)`,
+  )
+    .bind(tokenHash, userId, expires.toISOString(), now.toISOString(), now.toISOString())
+    .run();
+  setCookie(c, sessionCookieName(c.env), token, {
+    httpOnly: true,
+    path: "/",
+    sameSite: "Lax",
+    secure: new URL(c.req.url).protocol === "https:",
+    expires,
+  });
+}
+
+function toUserSummary(row: UserRow): UserSummary {
+  return {
+    id: row.id,
+    handle: row.handle,
+    displayName: row.display_name,
+  };
+}
+
+function normalizeHandle(handle: string): string {
+  return handle.trim().toLowerCase();
+}
+
+function normalizeEmail(email: string | undefined): string | null {
+  const value = email?.trim().toLowerCase();
+  if (!value) {
+    return null;
+  }
+  return value;
+}
