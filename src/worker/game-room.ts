@@ -22,8 +22,6 @@ type ResignRequest = {
   requestId: string;
 };
 
-const STORAGE_KEY = "game";
-
 export class GameRoom implements DurableObject {
   constructor(
     private readonly state: DurableObjectState,
@@ -231,10 +229,6 @@ export class GameRoom implements DurableObject {
   }
 
   private async loadGame(): Promise<StoredGame | null> {
-    const stored = await this.state.storage.get<StoredGame>(STORAGE_KEY);
-    if (stored) {
-      return stored;
-    }
     const id = this.state.id.name;
     if (!id) {
       return null;
@@ -253,9 +247,7 @@ export class GameRoom implements DurableObject {
     if (!row) {
       return null;
     }
-    const game = toStoredGame(row);
-    await this.state.storage.put(STORAGE_KEY, game);
-    return game;
+    return toStoredGame(row);
   }
 
   private async requireGame(): Promise<StoredGame> {
@@ -340,7 +332,6 @@ export class GameRoom implements DurableObject {
       ),
       this.insertEventStatement(game, event),
     ]);
-    await this.state.storage.put(STORAGE_KEY, game);
   }
 
   private async persistGame(game: StoredGame, event: PersistableEvent): Promise<void> {
@@ -371,7 +362,6 @@ export class GameRoom implements DurableObject {
       ),
       this.insertEventStatement(game, event),
     ]);
-    await this.state.storage.put(STORAGE_KEY, game);
   }
 
   private insertEventStatement(game: StoredGame, event: PersistableEvent): D1PreparedStatement {

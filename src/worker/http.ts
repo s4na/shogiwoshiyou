@@ -26,7 +26,7 @@ export function apiError(
 export function ensureSameOrigin(c: Context<AppEnv>): void {
   const origin = c.req.header("Origin");
   if (!origin) {
-    return;
+    throw new HttpError(403, "missing_origin", "Originヘッダーが必要です。");
   }
   const requestUrl = new URL(c.req.url);
   const originUrl = new URL(origin);

@@ -136,6 +136,7 @@ app.get("/api/games/:id/events", async (c) => {
 });
 
 app.get("/api/games/:id/ws", async (c) => {
+  ensureSameOrigin(c);
   const gameId = validGameId(c.req.param("id"));
   const headers = new Headers(c.req.raw.headers);
   headers.set("x-user-id", c.get("user").id);

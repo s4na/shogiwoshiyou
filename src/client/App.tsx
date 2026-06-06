@@ -81,7 +81,7 @@ export function App() {
           <HistoryPanel />
         </section>
       )}
-      {notice.value ? <div class="toast">{notice.value}</div> : null}
+      {notice.value ? <div class="toast" role="alert">{notice.value}</div> : null}
     </main>
   );
 }
@@ -561,8 +561,10 @@ function startPolling(gameId: string): void {
     }
     connection.value = "polling";
     void getGame(gameId)
-      .then((response) => {
+      .then(async (response) => {
         activeGame.value = response.game;
+        await refreshGames();
+        await refreshEvents();
       })
       .catch(showError);
   }, 5000);
