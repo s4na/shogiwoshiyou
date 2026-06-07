@@ -588,7 +588,7 @@ function StaticBoard({
       <div style={{ display: "flex" }}>
         <div style={{ display: "grid", gridTemplateColumns: `repeat(9,${String(cellSize)}px)`, gridTemplateRows: `repeat(9,${String(cellSize)}px)`, background: `linear-gradient(135deg,${t.board.kayaLight} 0%,${t.board.kaya} 50%,${t.board.kayaDark} 100%)`, border: `2px solid ${t.board.grid}`, boxShadow: t.shadow.lg }}>
           {grid.flatMap((row, ri) => row.map((piece, ci) => {
-            const isStar  = STARS.some(([sc,sr]) => sc===ci && sr===ri);
+            const isStar  = STARS.some(([r,c]) => r===ri && c===ci);
             const isSel   = cellEq(selected,  ci, ri);
             const isLast  = cellEq(lastFrom,  ci, ri) || cellEq(lastTo, ci, ri);
             const isLegal = legalMoves?.some(([lc,lr]) => lc===ci && lr===ri) ?? false;

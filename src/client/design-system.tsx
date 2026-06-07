@@ -76,7 +76,7 @@ export function ShogiPiece({
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        cursor: "pointer",
+        cursor: "inherit",
         transform: flipped ? "rotate(180deg)" : "none",
         opacity: dim ? 0.35 : 1,
         transition: `transform ${MOTION.fast},opacity ${MOTION.normal}`,
@@ -338,7 +338,7 @@ export function Modal({
       style={{
         position: "fixed",
         inset: 0,
-        zIndex: ZINDEX.overlay,
+        zIndex: ZINDEX.modal,
         display: "flex",
         alignItems: "center",
         justifyContent: "center",

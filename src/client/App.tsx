@@ -245,7 +245,7 @@ function SessionArea() {
       </Btn>
       {editing && (
         <form
-          onSubmit={(event) => { void submitProfile(event).then(() => { setEditing(false); }); }}
+          onSubmit={(event) => { void submitProfile(event).then((ok) => { if (ok) setEditing(false); }); }}
           style={{ display: "flex", alignItems: "center", gap: 6 }}
         >
           <input
@@ -975,10 +975,11 @@ async function submitAuth(event: SubmitEvent): Promise<void> {
   });
 }
 
-async function submitProfile(event: SubmitEvent): Promise<void> {
+async function submitProfile(event: SubmitEvent): Promise<boolean> {
   event.preventDefault();
   const form = new FormData(event.currentTarget as HTMLFormElement);
   const input = Object.fromEntries(form.entries());
+  let ok = false;
   await withBusy(async () => {
     const session = await updateProfile(input);
     user.value = session.user;
@@ -987,7 +988,9 @@ async function submitProfile(event: SubmitEvent): Promise<void> {
       const response = await getGame(activeGame.value.id);
       applyGameSnapshot(response.game);
     }
+    ok = true;
   });
+  return ok;
 }
 
 async function handleLogout(): Promise<void> {
