@@ -206,13 +206,13 @@ export class GameRoom implements DurableObject {
     const requestId = validateRequestId(body.requestId);
     const usi = validateUsi(body.usi);
     const game = await this.requireGame();
-    await this.returnIfDuplicateRequest(game, requestId);
     if (game.status !== "active") {
       throw new RoomError(409, "game_not_active", "対局中ではありません。");
     }
     if (expectedUserForTurn(game) !== userId) {
       throw new RoomError(409, "not_your_turn", "手番ではありません。");
     }
+    await this.returnIfDuplicateRequest(game, requestId);
     const applied = applyUsiMove(game.sfen, usi);
     if (!applied.ok) {
       throw new RoomError(422, "illegal_move", applied.message);
@@ -227,7 +227,7 @@ export class GameRoom implements DurableObject {
       lastEventSeq: game.lastEventSeq + 1,
       updatedAt: now,
     };
-    await this.persistGame(next, {
+    const moveEvent: PersistableEvent = {
       type: "move.played",
       actorUserId: userId,
       payload: {
@@ -236,12 +236,17 @@ export class GameRoom implements DurableObject {
         color: playerColorForUser(game, userId),
       },
       clientRequestId: requestId,
-    });
+    };
     if (isCurrentPlayerCheckmated(next.sfen)) {
-      const ended = await this.endByCheckmate(next, expectedUserForTurn(next));
+      const ended = endGameByCheckmate(next, expectedUserForTurn(next), new Date().toISOString());
+      await this.persistGame(ended, [
+        { ...moveEvent, seq: next.lastEventSeq, createdAt: next.updatedAt },
+        this.checkmateEvent(ended, expectedUserForTurn(next)),
+      ]);
       await this.broadcast(ended);
       return this.snapshotResponse(ended);
     }
+    await this.persistGame(next, moveEvent);
     if (next.mode === "cpu" && expectedUserForTurn(next) === CPU_USER_ID) {
       await this.state.storage.setAlarm(Date.now() + CPU_MOVE_DELAY_MS);
     }
@@ -252,11 +257,11 @@ export class GameRoom implements DurableObject {
   private async resign(userId: string, body: Partial<ResignRequest>): Promise<Response> {
     const requestId = validateRequestId(body.requestId);
     const game = await this.requireGame();
-    await this.returnIfDuplicateRequest(game, requestId);
     const color = playerColorForUser(game, userId);
     if (!color) {
       throw new RoomError(403, "not_player", "対局者ではありません。");
     }
+    await this.returnIfDuplicateRequest(game, requestId);
     if (game.status === "ended") {
       return this.snapshotResponse(game);
     }
@@ -378,7 +383,7 @@ export class GameRoom implements DurableObject {
       lastEventSeq: game.lastEventSeq + 1,
       updatedAt: now,
     };
-    await this.persistGame(moved, {
+    const moveEvent: PersistableEvent = {
       type: "move.played",
       actorUserId: CPU_USER_ID,
       payload: {
@@ -387,23 +392,33 @@ export class GameRoom implements DurableObject {
         color: "white",
       },
       clientRequestId: null,
-    });
+    };
     if (isCurrentPlayerCheckmated(moved.sfen)) {
-      return await this.endByCheckmate(moved, game.blackUserId);
+      const ended = endGameByCheckmate(moved, game.blackUserId, new Date().toISOString());
+      await this.persistGame(ended, [
+        { ...moveEvent, seq: moved.lastEventSeq, createdAt: moved.updatedAt },
+        this.checkmateEvent(ended, game.blackUserId),
+      ]);
+      return ended;
     }
+    await this.persistGame(moved, moveEvent);
     return moved;
   }
 
   private async endByCheckmate(game: StoredGame, loserUserId: string): Promise<StoredGame> {
     const now = new Date().toISOString();
     const next = endGameByCheckmate(game, loserUserId, now);
-    await this.persistGame(next, {
-      type: "game.checkmated",
-      actorUserId: loserUserId,
-      payload: { loserUserId, winnerUserId: next.winnerUserId },
-      clientRequestId: null,
-    });
+    await this.persistGame(next, this.checkmateEvent(next, loserUserId));
     return next;
+  }
+
+  private checkmateEvent(game: StoredGame, loserUserId: string): PersistableEvent {
+    return {
+      type: "game.checkmated",
+      actorUserId: null,
+      payload: { loserUserId, winnerUserId: game.winnerUserId },
+      clientRequestId: null,
+    };
   }
 
   private async ensureCpuUser(now: string): Promise<void> {
@@ -481,7 +496,11 @@ export class GameRoom implements DurableObject {
     ]);
   }
 
-  private async persistGame(game: StoredGame, event: PersistableEvent): Promise<void> {
+  private async persistGame(
+    game: StoredGame,
+    eventOrEvents: PersistableEvent | PersistableEvent[],
+  ): Promise<void> {
+    const events = Array.isArray(eventOrEvents) ? eventOrEvents : [eventOrEvents];
     await this.env.DB.batch([
       this.env.DB.prepare(
         `UPDATE games
@@ -507,7 +526,7 @@ export class GameRoom implements DurableObject {
         game.version,
         game.updatedAt,
       ),
-      this.insertEventStatement(game, event),
+      ...events.map((event) => this.insertEventStatement(game, event)),
     ]);
   }
 
@@ -519,12 +538,12 @@ export class GameRoom implements DurableObject {
     ).bind(
       crypto.randomUUID(),
       game.id,
-      game.lastEventSeq,
+      event.seq ?? game.lastEventSeq,
       event.type,
       event.actorUserId,
       JSON.stringify(event.payload),
       event.clientRequestId,
-      game.updatedAt,
+      event.createdAt ?? game.updatedAt,
     );
   }
 }
@@ -534,6 +553,8 @@ type PersistableEvent = {
   actorUserId: string | null;
   payload: unknown;
   clientRequestId: string | null;
+  seq?: number;
+  createdAt?: string;
 };
 
 class RoomError extends Error {

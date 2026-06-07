@@ -5,6 +5,52 @@ import type { Env } from "../src/worker/env";
 import type { StoredGame } from "../src/worker/shogi";
 
 describe("GameRoom moves", () => {
+  it("does not return a duplicate move snapshot to a non-player", async () => {
+    const requestId = "00000000-0000-4000-8000-000000000002";
+    const game = storedGame({
+      mode: "friend",
+      whiteUserId: "white-user",
+      sfen: "4k4/9/9/9/9/9/9/9/4K4 b - 1",
+      currentTurn: "black",
+    });
+    const db = new FakeD1(game, [requestId]);
+    const room = createRoom(game, db);
+
+    const response = await room.fetch(
+      new Request("https://game-room/move", {
+        method: "POST",
+        headers: { "x-user-id": "watcher" },
+        body: JSON.stringify({ usi: "5i5h", requestId }),
+      }),
+    );
+    const body: { error?: { code?: string } } = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(body.error?.code).toBe("not_your_turn");
+  });
+
+  it("does not return a duplicate resign snapshot to a non-player", async () => {
+    const requestId = "00000000-0000-4000-8000-000000000003";
+    const game = storedGame({
+      mode: "friend",
+      whiteUserId: "white-user",
+    });
+    const db = new FakeD1(game, [requestId]);
+    const room = createRoom(game, db);
+
+    const response = await room.fetch(
+      new Request("https://game-room/resign", {
+        method: "POST",
+        headers: { "x-user-id": "watcher" },
+        body: JSON.stringify({ requestId }),
+      }),
+    );
+    const body: { error?: { code?: string } } = await response.json();
+
+    expect(response.status).toBe(403);
+    expect(body.error?.code).toBe("not_player");
+  });
+
   it("ends the game when a player move checkmates the opponent", async () => {
     const game = storedGame({
       mode: "friend",
@@ -40,6 +86,11 @@ describe("GameRoom moves", () => {
         current_turn: "white",
       }),
     );
+    expect(db.batchStatementTypes).toContainEqual([
+      "UPDATE games",
+      "move.played",
+      "game.checkmated",
+    ]);
     expect(db.insertedEvents).toHaveLength(2);
     expect(db.insertedEvents[0]).toEqual(
       expect.objectContaining({
@@ -53,7 +104,7 @@ describe("GameRoom moves", () => {
       expect.objectContaining({
         seq: 3,
         type: "game.checkmated",
-        actor_user_id: "white-user",
+        actor_user_id: null,
         payload_json: JSON.stringify({
           loserUserId: "white-user",
           winnerUserId: "black-user",
@@ -81,6 +132,11 @@ describe("GameRoom moves", () => {
         current_turn: "black",
       }),
     );
+    expect(db.batchStatementTypes).toContainEqual([
+      "UPDATE games",
+      "move.played",
+      "game.checkmated",
+    ]);
     expect(db.insertedEvents).toHaveLength(2);
     expect(db.insertedEvents[0]).toEqual(
       expect.objectContaining({
@@ -99,7 +155,7 @@ describe("GameRoom moves", () => {
       expect.objectContaining({
         seq: 3,
         type: "game.checkmated",
-        actor_user_id: "black-user",
+        actor_user_id: null,
         payload_json: JSON.stringify({
           loserUserId: "black-user",
           winnerUserId: "cpu-basic",
@@ -130,8 +186,9 @@ describe("GameRoom moves", () => {
     expect(db.insertedEvents).toHaveLength(1);
     expect(db.insertedEvents[0]).toEqual(
       expect.objectContaining({
+        seq: 2,
         type: "game.checkmated",
-        actor_user_id: "cpu-basic",
+        actor_user_id: null,
         payload_json: JSON.stringify({
           loserUserId: "cpu-basic",
           winnerUserId: "black-user",
@@ -178,10 +235,13 @@ function storedGame(overrides: Partial<StoredGame> = {}): StoredGame {
 class FakeD1 {
   updatedGame: Record<string, unknown> | null = null;
   insertedEvents: Record<string, unknown>[] = [];
+  batchStatementTypes: string[][] = [];
   private currentGame: StoredGame;
+  private readonly duplicateRequestIds: Set<string>;
 
-  constructor(game: StoredGame) {
+  constructor(game: StoredGame, duplicateRequestIds: string[] = []) {
     this.currentGame = game;
+    this.duplicateRequestIds = new Set(duplicateRequestIds);
   }
 
   prepare(sql: string): FakeStatement {
@@ -189,6 +249,7 @@ class FakeD1 {
   }
 
   async batch(statements: FakeStatement[]): Promise<unknown[]> {
+    this.batchStatementTypes.push(statements.map((statement) => statement.kind()));
     const results: unknown[] = [];
     for (const statement of statements) {
       results.push(await statement.run());
@@ -213,6 +274,10 @@ class FakeD1 {
       updated_at: this.currentGame.updatedAt,
       last_event_seq: this.currentGame.lastEventSeq,
     };
+  }
+
+  hasDuplicateRequestId(requestId: unknown): boolean {
+    return typeof requestId === "string" && this.duplicateRequestIds.has(requestId);
   }
 
   applyUpdatedGame(row: Record<string, unknown>): void {
@@ -240,12 +305,25 @@ class FakeStatement {
     private readonly db: FakeD1,
   ) {}
 
+  kind(): string {
+    if (this.sql.includes("UPDATE games")) {
+      return "UPDATE games";
+    }
+    if (this.sql.includes("INSERT INTO game_events")) {
+      return String(this.values[3]);
+    }
+    return "other";
+  }
+
   bind(...values: unknown[]): this {
     this.values = values;
     return this;
   }
 
   first<T>(): Promise<T | null> {
+    if (this.sql.includes("FROM game_events")) {
+      return Promise.resolve(this.db.hasDuplicateRequestId(this.values[1]) ? ({ id: "event-1" } as T) : null);
+    }
     if (this.sql.includes("FROM games")) {
       return Promise.resolve(this.db.rowForGame() as T);
     }
