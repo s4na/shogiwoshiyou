@@ -207,7 +207,7 @@ export class GameRoom implements DurableObject {
     const usi = validateUsi(body.usi);
     const game = await this.requireGame();
     this.ensureCanViewGame(game, userId);
-    await this.returnIfDuplicateRequest(game, requestId, userId);
+    await this.returnIfDuplicateRequest(game, requestId);
     if (game.status !== "active") {
       throw new RoomError(409, "game_not_active", "対局中ではありません。");
     }
@@ -262,7 +262,7 @@ export class GameRoom implements DurableObject {
     if (!color) {
       throw new RoomError(403, "not_player", "対局者ではありません。");
     }
-    await this.returnIfDuplicateRequest(game, requestId, userId);
+    await this.returnIfDuplicateRequest(game, requestId);
     if (game.status === "ended") {
       return this.snapshotResponse(game);
     }
@@ -293,16 +293,11 @@ export class GameRoom implements DurableObject {
   private async returnIfDuplicateRequest(
     game: StoredGame,
     clientRequestId: string,
-    actorUserId: string,
   ): Promise<void> {
     const existing = await this.env.DB.prepare(
-      `SELECT id FROM game_events
-       WHERE game_id = ?1
-         AND client_request_id = ?2
-         AND actor_user_id = ?3
-       LIMIT 1`,
+      `SELECT id FROM game_events WHERE game_id = ?1 AND client_request_id = ?2 LIMIT 1`,
     )
-      .bind(game.id, clientRequestId, actorUserId)
+      .bind(game.id, clientRequestId)
       .first<{ id: string }>();
     if (existing) {
       throw new DuplicateRequest(await this.snapshotResponse(game));

@@ -13,7 +13,7 @@ describe("GameRoom moves", () => {
       sfen: "4k4/9/9/9/9/9/9/9/4K4 b - 1",
       currentTurn: "black",
     });
-    const db = new FakeD1(game, [{ requestId, actorUserId: "black-user" }]);
+    const db = new FakeD1(game, [requestId]);
     const room = createRoom(game, db);
 
     const response = await room.fetch(
@@ -29,7 +29,7 @@ describe("GameRoom moves", () => {
     expect(body.error?.code).toBe("not_player");
   });
 
-  it("returns a duplicate move snapshot to the original player after the turn changed", async () => {
+  it("returns a duplicate move snapshot to a player after the turn changed", async () => {
     const requestId = "00000000-0000-4000-8000-000000000004";
     const game = storedGame({
       mode: "friend",
@@ -40,13 +40,13 @@ describe("GameRoom moves", () => {
       lastEventSeq: 2,
       version: 1,
     });
-    const db = new FakeD1(game, [{ requestId, actorUserId: "black-user" }]);
+    const db = new FakeD1(game, [requestId]);
     const room = createRoom(game, db);
 
     const response = await room.fetch(
       new Request("https://game-room/move", {
         method: "POST",
-        headers: { "x-user-id": "black-user" },
+        headers: { "x-user-id": "white-user" },
         body: JSON.stringify({ usi: "5i5h", requestId }),
       }),
     );
@@ -62,7 +62,7 @@ describe("GameRoom moves", () => {
       mode: "friend",
       whiteUserId: "white-user",
     });
-    const db = new FakeD1(game, [{ requestId, actorUserId: "black-user" }]);
+    const db = new FakeD1(game, [requestId]);
     const room = createRoom(game, db);
 
     const response = await room.fetch(
@@ -264,16 +264,11 @@ class FakeD1 {
   insertedEvents: Record<string, unknown>[] = [];
   batchStatementTypes: string[][] = [];
   private currentGame: StoredGame;
-  private readonly duplicateRequests: Set<string>;
+  private readonly duplicateRequestIds: Set<string>;
 
-  constructor(
-    game: StoredGame,
-    duplicateRequests: { requestId: string; actorUserId: string }[] = [],
-  ) {
+  constructor(game: StoredGame, duplicateRequestIds: string[] = []) {
     this.currentGame = game;
-    this.duplicateRequests = new Set(
-      duplicateRequests.map((request) => `${request.requestId}:${request.actorUserId}`),
-    );
+    this.duplicateRequestIds = new Set(duplicateRequestIds);
   }
 
   prepare(sql: string): FakeStatement {
@@ -308,12 +303,8 @@ class FakeD1 {
     };
   }
 
-  hasDuplicateRequestId(requestId: unknown, actorUserId: unknown): boolean {
-    return (
-      typeof requestId === "string" &&
-      typeof actorUserId === "string" &&
-      this.duplicateRequests.has(`${requestId}:${actorUserId}`)
-    );
+  hasDuplicateRequestId(requestId: unknown): boolean {
+    return typeof requestId === "string" && this.duplicateRequestIds.has(requestId);
   }
 
   applyUpdatedGame(row: Record<string, unknown>): void {
@@ -358,11 +349,7 @@ class FakeStatement {
 
   first<T>(): Promise<T | null> {
     if (this.sql.includes("FROM game_events")) {
-      return Promise.resolve(
-        this.db.hasDuplicateRequestId(this.values[1], this.values[2])
-          ? ({ id: "event-1" } as T)
-          : null,
-      );
+      return Promise.resolve(this.db.hasDuplicateRequestId(this.values[1]) ? ({ id: "event-1" } as T) : null);
     }
     if (this.sql.includes("FROM games")) {
       return Promise.resolve(this.db.rowForGame() as T);
