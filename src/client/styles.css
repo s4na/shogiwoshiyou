@@ -391,6 +391,7 @@ h2 {
 .board-grid {
   display: grid;
   grid-template-columns: repeat(9, minmax(0, 1fr));
+  grid-template-rows: repeat(9, minmax(0, 1fr));
   aspect-ratio: 1;
   width: min(74svh, 100%);
   max-width: 720px;
@@ -401,13 +402,19 @@ h2 {
 
 .board-square {
   display: grid;
+  container-type: inline-size;
+  aspect-ratio: 1;
+  inline-size: 100%;
+  block-size: 100%;
   min-width: 0;
   min-height: 0;
+  overflow: clip;
   place-items: center;
   border: 1px solid rgb(107 63 28 / 72%);
   border-radius: 0;
   background: transparent;
   padding: 0;
+  line-height: 1;
 }
 
 .board-square:hover:not(:disabled),
@@ -417,18 +424,23 @@ h2 {
 
 .piece {
   display: grid;
-  width: 72%;
-  height: 84%;
+  inline-size: 72%;
+  block-size: 82%;
   place-items: center;
   border: 1px solid rgb(107 63 28 / 46%);
-  border-radius: 5px 5px 12px 12px;
-  background: linear-gradient(180deg, #fff4d2, #e9bd72);
+  border-radius: 10% 10% 18% 18% / 8% 8% 16% 16%;
+  clip-path: polygon(50% 0, 86% 14%, 96% 100%, 4% 100%, 14% 14%);
+  background: linear-gradient(180deg, #fff8d8 0%, #f1cf86 58%, #d99b48 100%);
   color: #2b1a10;
   font-family: "Hiragino Mincho ProN", "Yu Mincho", serif;
-  font-size: clamp(1rem, 2.2vw, 1.9rem);
+  font-size: clamp(0.9rem, 38cqi, 1.78rem);
   font-weight: 800;
   line-height: 1;
-  box-shadow: inset 0 -2px 0 rgb(107 63 28 / 20%);
+  box-shadow:
+    inset 0 -2px 0 rgb(107 63 28 / 22%),
+    0 1px 2px rgb(43 26 16 / 22%);
+  font-variant-east-asian: traditional;
+  text-align: center;
 }
 
 .piece.inverted {
@@ -539,8 +551,8 @@ code {
   }
 
   .piece {
-    width: 78%;
-    height: 84%;
-    font-size: clamp(0.78rem, 4vw, 1.18rem);
+    inline-size: 76%;
+    block-size: 82%;
+    font-size: clamp(0.72rem, 36cqi, 1.12rem);
   }
 }
