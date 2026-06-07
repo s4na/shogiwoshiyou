@@ -53,6 +53,8 @@ export type MoveApplication =
     };
 
 const USI_MOVE_PATTERN = /^(?:[1-9][a-i][1-9][a-i]\+?|[PLNSGBR]\*[1-9][a-i])$/;
+const FILE_LABELS = ["", "１", "２", "３", "４", "５", "６", "７", "８", "９"];
+const RANK_LABELS = ["", "一", "二", "三", "四", "五", "六", "七", "八", "九"];
 const CHECK_BONUS = 80;
 const MATE_SCORE = 100_000;
 const PIECE_VALUES: Record<TsshogiPieceType, number> = {
@@ -199,7 +201,7 @@ export function snapshotFromStoredGame(
       black: handPieces(position, TsshogiColor.BLACK),
       white: handPieces(position, TsshogiColor.WHITE),
     },
-    moves: game.moves.map((usi, index): GameMove => ({ ply: index + 1, usi })),
+    moves: notationFromUsiHistory(game.moves),
     createdAt: game.createdAt,
     updatedAt: game.updatedAt,
   };
@@ -264,6 +266,30 @@ function toPlayer(user: UserSummary, color: PlayerColor): GamePlayer {
     ...user,
     color,
   };
+}
+
+function notationFromUsiHistory(moves: string[]): GameMove[] {
+  const position = Position.newBySFEN(InitialPositionSFEN.STANDARD);
+  if (!position) {
+    return moves.map((usi, index) => ({ ply: index + 1, usi, notation: usi }));
+  }
+  return moves.map((usi, index): GameMove => {
+    const move = position.createMoveByUSI(usi);
+    if (!move || !position.isValidMove(move)) {
+      return { ply: index + 1, usi, notation: usi };
+    }
+    const notation = moveNotation(move);
+    position.doMove(move);
+    return { ply: index + 1, usi, notation };
+  });
+}
+
+function moveNotation(move: Move): string {
+  const destination = `${FILE_LABELS[move.to.file] ?? String(move.to.file)}${RANK_LABELS[move.to.rank] ?? String(move.to.rank)}`;
+  const piece = standardPieceName(move.pieceType);
+  const drop = typeof move.from === "string" ? "打" : "";
+  const promote = move.promote ? "成" : "";
+  return `${destination}${piece}${drop}${promote}`;
 }
 
 export function expectedUserForTurn(game: StoredGame): string {

@@ -17,6 +17,8 @@ import {
 } from "./api";
 import {
   dropUsi,
+  moveNotationLabel,
+  moveUsiTitle,
   myColor,
   orderedBoardSquares,
   promotionMoveOptions,
@@ -897,13 +899,14 @@ function HistoryPanel() {
                   {move.ply}
                 </span>
                 <code
+                  title={moveUsiTitle(move)}
                   style={{
                     fontFamily: `"SFMono-Regular", Consolas, monospace`,
                     fontSize: 11,
                     color: t.text.primary,
                   }}
                 >
-                  {move.usi}
+                  {moveNotationLabel(move)}
                 </code>
               </li>
             ))}
@@ -914,7 +917,7 @@ function HistoryPanel() {
       {events.value.length > 0 && (
         <div style={{ marginTop: 12, borderTop: `1px solid ${t.border.subtle}`, paddingTop: 8 }}>
           <p style={{ fontFamily: fG, fontSize: 10, color: t.text.tertiary, marginBottom: 6 }}>イベント</p>
-          {events.value.slice(-5).map((event) => (
+          {events.value.slice(-6).map((event) => (
             <p
               key={event.id}
               style={{

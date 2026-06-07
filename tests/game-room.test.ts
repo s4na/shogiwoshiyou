@@ -96,24 +96,47 @@ describe("GameRoom moves", () => {
         env,
       ),
     ).resolves.toHaveProperty("status", 200);
-    await expect(
-      app.request(
-        `${origin}/api/games/${gameId}/moves`,
-        {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            cookie: white.cookie,
-            origin,
-          },
-          body: JSON.stringify({
-            usi: "3c3d",
-            requestId: "00000000-0000-4000-8000-000000000202",
-          }),
+    const whiteMove = await app.request(
+      `${origin}/api/games/${gameId}/moves`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          cookie: white.cookie,
+          origin,
         },
-        env,
-      ),
-    ).resolves.toHaveProperty("status", 200);
+        body: JSON.stringify({
+          usi: "3c3d",
+          requestId: "00000000-0000-4000-8000-000000000202",
+        }),
+      },
+      env,
+    );
+    const whiteMoveBody: { game?: { moves?: { ply?: number; usi?: string; notation?: string }[] } } =
+      await whiteMove.json();
+
+    expect(whiteMove.status).toBe(200);
+    expect(whiteMoveBody.game?.moves).toEqual([
+      { ply: 1, usi: "7g7f", notation: "７六歩" },
+      { ply: 2, usi: "3c3d", notation: "３四歩" },
+    ]);
+    expect(db.updatedGame?.moves_json).toBe(JSON.stringify(["7g7f", "3c3d"]));
+
+    const reloaded = await app.request(
+      `${origin}/api/games/${gameId}`,
+      {
+        headers: { cookie: black.cookie },
+      },
+      env,
+    );
+    const reloadedBody: { game?: { moves?: { ply?: number; usi?: string; notation?: string }[] } } =
+      await reloaded.json();
+
+    expect(reloaded.status).toBe(200);
+    expect(reloadedBody.game?.moves).toEqual([
+      { ply: 1, usi: "7g7f", notation: "７六歩" },
+      { ply: 2, usi: "3c3d", notation: "３四歩" },
+    ]);
 
     const events = await app.request(
       `${origin}/api/games/${gameId}/events?after=0`,
