@@ -108,8 +108,11 @@ function ColorTokens({ theme: t }: { theme: Theme }) {
         <Row>
           <Swatch color={t.accent.gold} label="accent.gold" />
           <Swatch color={t.accent.goldLight} label="accent.goldLight" />
+          <Swatch color={t.accent.goldDim} label="accent.goldDim" />
           <Swatch color={t.accent.vermillion} label="accent.vermillion" />
+          <Swatch color={t.accent.vermillionDim} label="accent.vermillionDim" />
           <Swatch color={t.accent.jade} label="accent.jade" />
+          <Swatch color={t.accent.jadeDim} label="accent.jadeDim" />
         </Row>
       </SubSection>
       <SubSection title="セマンティック">
@@ -118,6 +121,9 @@ function ColorTokens({ theme: t }: { theme: Theme }) {
           <Swatch color={t.semantic.lose} label="semantic.lose" />
           <Swatch color={t.semantic.draw} label="semantic.draw" />
           <Swatch color={t.semantic.check} label="semantic.check" />
+          <Swatch color={t.semantic.lastMove} label="semantic.lastMove" />
+          <Swatch color={t.semantic.legalMove} label="semantic.legalMove" />
+          <Swatch color={t.semantic.selected} label="semantic.selected" />
           <Swatch color={t.semantic.online} label="semantic.online" />
           <Swatch color={t.semantic.offline} label="semantic.offline" />
           <Swatch color={t.semantic.away} label="semantic.away" />
@@ -130,6 +136,15 @@ function ColorTokens({ theme: t }: { theme: Theme }) {
           <Swatch color={t.board.kayaDark} label="board.kayaDark" />
           <Swatch color={t.board.grid} label="board.grid" />
           <Swatch color={t.board.star} label="board.star" />
+        </Row>
+      </SubSection>
+      <SubSection title="駒">
+        <Row>
+          <Swatch color={t.piece.face} label="piece.face" />
+          <Swatch color={t.piece.text} label="piece.text" />
+          <Swatch color={t.piece.border} label="piece.border" />
+          <Swatch color={t.piece.promoted} label="piece.promoted" />
+          <Swatch color={t.piece.promotedGlow} label="piece.promotedGlow" />
         </Row>
       </SubSection>
     </>
