@@ -24,6 +24,7 @@ import {
   myColor,
   orderedBoardSquares,
   promotionMoveOptions,
+  retainedPieceSelection,
   shouldInvertPiece,
 } from "./shogi-ui";
 import {
@@ -531,7 +532,6 @@ function BoardPanel() {
 
   const color = myColor(game, user.value.id);
   const orientation = color ?? "black";
-  const myTurn = color !== null && game.status === "active" && game.currentTurn === color;
   const choice = promotionChoice.value;
 
   return (
@@ -584,7 +584,7 @@ function BoardPanel() {
       <HandRow game={game} color="white" orientation={orientation} />
 
       {/* Board */}
-      <ShogiBoard game={game} orientation={orientation} myTurn={myTurn} />
+      <ShogiBoard game={game} orientation={orientation} />
 
       {/* Black hand */}
       <HandRow game={game} color="black" orientation={orientation} />
@@ -622,11 +622,9 @@ function BoardPanel() {
 function ShogiBoard({
   game,
   orientation,
-  myTurn,
 }: {
   game: GameSnapshot;
   orientation: PlayerColor;
-  myTurn: boolean;
 }) {
   const t = useTheme();
   const outerRef = useRef<HTMLDivElement>(null);
@@ -718,7 +716,6 @@ function ShogiBoard({
                   key={square.square}
                   onClick={() => void handleSquareClick(square.square)}
                   disabled={busy.value}
-                  aria-disabled={!myTurn}
                   aria-label={boardSquareLabel(square.square, square.piece, selected, isLegalDestination)}
                   style={{
                     width: cellSize,
@@ -804,7 +801,7 @@ function HandRow({
   const visibleColor = orientation === "black" ? color : color === "black" ? "white" : "black";
   const pieces = game.hands[visibleColor];
   const ownHand = user.value ? myColor(game, user.value.id) === visibleColor : false;
-  const isMyTurn = game.status === "active" && game.currentTurn === visibleColor;
+  const canSelectHand = game.status === "active" && ownHand;
 
   return (
     <div
@@ -831,7 +828,7 @@ function HandRow({
             type="button"
             key={piece.type}
             aria-pressed={sel}
-            disabled={busy.value || !ownHand || !isMyTurn}
+            disabled={busy.value || !canSelectHand}
             onClick={() => {
               selectedSquare.value = null;
               selectedHand.value = selectedHand.value === piece.type ? null : piece.type;
@@ -844,7 +841,7 @@ function HandRow({
               backgroundColor: sel ? t.semantic.selected : t.bg.tertiary,
               border: `1px solid ${sel ? t.accent.gold : t.border.default}`,
               borderRadius: R.md,
-              cursor: busy.value || !ownHand || !isMyTurn ? "default" : "pointer",
+              cursor: busy.value || !canSelectHand ? "default" : "pointer",
               transition: `all ${MOTION.normal}`,
             }}
           >
@@ -1055,9 +1052,17 @@ async function handleSquareClick(square: string): Promise<void> {
   if (!game || !user.value || busy.value) return;
   if (promotionChoice.value) { promotionChoice.value = null; return; }
   const color = myColor(game, user.value.id);
-  if (!color || game.status !== "active" || game.currentTurn !== color) return;
-  if (selectedHand.value) { await submitMove(dropUsi(selectedHand.value, square)); return; }
+  if (!color || game.status !== "active") return;
+  const myTurn = game.currentTurn === color;
   const boardSquare = game.board.find((candidate) => candidate.square === square);
+  if (selectedHand.value) {
+    if (myTurn) { await submitMove(dropUsi(selectedHand.value, square)); return; }
+    if (boardSquare?.piece?.color === color) {
+      selectedHand.value = null;
+      selectedSquare.value = square;
+    }
+    return;
+  }
   if (!selectedSquare.value) {
     if (boardSquare?.piece?.color === color) { selectedSquare.value = square; }
     return;
@@ -1068,6 +1073,7 @@ async function handleSquareClick(square: string): Promise<void> {
     selectedSquare.value = square;
     return;
   }
+  if (!myTurn) return;
   const options = promotionMoveOptions(game, from, square);
   if (options.mustPromote) { await submitMove(options.promotedUsi); return; }
   if (options.canPromote) {
@@ -1169,9 +1175,19 @@ function applyGameSnapshot(game: GameSnapshot): void {
   activeGame.value = game;
   if (!user.value) return;
   const color = myColor(game, user.value.id);
-  if (!color || game.status !== "active" || game.currentTurn !== color) {
+  if (!color || game.status !== "active") {
     selectedSquare.value = null;
     selectedHand.value = null;
+    promotionChoice.value = null;
+    return;
+  }
+  const retained = retainedPieceSelection(game, color, {
+    selectedSquare: selectedSquare.value,
+    selectedHand: selectedHand.value,
+  });
+  selectedSquare.value = retained.selectedSquare;
+  selectedHand.value = retained.selectedHand;
+  if (game.currentTurn !== color) {
     promotionChoice.value = null;
   }
 }

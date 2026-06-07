@@ -51,6 +51,31 @@ export function legalDropDestinations(game: GameSnapshot, type: HandPieceType): 
   return legalDestinationsFrom(position, type as TsshogiPieceType);
 }
 
+export function squareHasPlayerPiece(game: GameSnapshot, color: PlayerColor, square: string): boolean {
+  return game.board.find((candidate) => candidate.square === square)?.piece?.color === color;
+}
+
+export function handHasPiece(game: GameSnapshot, color: PlayerColor, type: HandPieceType): boolean {
+  return game.hands[color].some((piece) => piece.type === type && piece.count > 0);
+}
+
+export function retainedPieceSelection(
+  game: GameSnapshot,
+  color: PlayerColor,
+  selection: { selectedSquare: string | null; selectedHand: HandPieceType | null },
+): { selectedSquare: string | null; selectedHand: HandPieceType | null } {
+  return {
+    selectedSquare:
+      selection.selectedSquare && squareHasPlayerPiece(game, color, selection.selectedSquare)
+        ? selection.selectedSquare
+        : null,
+    selectedHand:
+      selection.selectedHand && handHasPiece(game, color, selection.selectedHand)
+        ? selection.selectedHand
+        : null,
+  };
+}
+
 export function myColor(game: GameSnapshot, userId: string): PlayerColor | null {
   if (game.players.black.id === userId) {
     return "black";

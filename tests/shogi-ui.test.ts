@@ -10,6 +10,9 @@ import {
   moveUsiTitle,
   myColor,
   promotionMoveOptions,
+  handHasPiece,
+  retainedPieceSelection,
+  squareHasPlayerPiece,
 } from "../src/client/shogi-ui";
 
 describe("client shogi helpers", () => {
@@ -29,6 +32,105 @@ describe("client shogi helpers", () => {
     expect(myColor(sampleGame(), "black-user")).toBe("black");
     expect(myColor(sampleGame(), "white-user")).toBe("white");
     expect(myColor(sampleGame(), "watcher")).toBeNull();
+  });
+
+  it("detects a player's board piece regardless of whose turn it is", () => {
+    const game = {
+      ...sampleGame({
+        square: "7g",
+        file: 7,
+        rank: 7,
+        piece: { color: "black", type: "pawn", label: "歩" },
+      }),
+      currentTurn: "white" as const,
+    };
+
+    expect(squareHasPlayerPiece(game, "black", "7g")).toBe(true);
+    expect(squareHasPlayerPiece(game, "white", "7g")).toBe(false);
+  });
+
+  it("detects whether a player still has a selected hand piece", () => {
+    const game = {
+      ...sampleGame(),
+      currentTurn: "white" as const,
+      hands: {
+        black: [{ type: "pawn" as const, label: "歩", count: 1 }],
+        white: [],
+      },
+    };
+
+    expect(handHasPiece(game, "black", "pawn")).toBe(true);
+    expect(handHasPiece(game, "black", "rook")).toBe(false);
+  });
+
+  it("retains a player's selected board piece during the opponent's turn", () => {
+    const game = {
+      ...sampleGame({
+        square: "7g",
+        file: 7,
+        rank: 7,
+        piece: { color: "black", type: "pawn", label: "歩" },
+      }),
+      currentTurn: "white" as const,
+      hands: {
+        black: [{ type: "pawn" as const, label: "歩", count: 1 }],
+        white: [],
+      },
+    };
+
+    expect(retainedPieceSelection(game, "black", { selectedSquare: "7g", selectedHand: null })).toEqual({
+      selectedSquare: "7g",
+      selectedHand: null,
+    });
+  });
+
+  it("retains a player's selected hand piece during the opponent's turn", () => {
+    const game = {
+      ...sampleGame(),
+      currentTurn: "white" as const,
+      hands: {
+        black: [{ type: "pawn" as const, label: "歩", count: 1 }],
+        white: [],
+      },
+    };
+
+    expect(retainedPieceSelection(game, "black", { selectedSquare: null, selectedHand: "pawn" })).toEqual({
+      selectedSquare: null,
+      selectedHand: "pawn",
+    });
+  });
+
+  it("clears a selected board piece that no longer belongs to the player", () => {
+    const game = {
+      ...sampleGame({
+        square: "7g",
+        file: 7,
+        rank: 7,
+        piece: { color: "white", type: "pawn", label: "歩" },
+      }),
+      currentTurn: "white" as const,
+    };
+
+    expect(retainedPieceSelection(game, "black", { selectedSquare: "7g", selectedHand: null })).toEqual({
+      selectedSquare: null,
+      selectedHand: null,
+    });
+  });
+
+  it("clears a selected hand piece that is no longer in the player's hand", () => {
+    const game = {
+      ...sampleGame(),
+      currentTurn: "white" as const,
+      hands: {
+        black: [],
+        white: [],
+      },
+    };
+
+    expect(retainedPieceSelection(game, "black", { selectedSquare: null, selectedHand: "pawn" })).toEqual({
+      selectedSquare: null,
+      selectedHand: null,
+    });
   });
 
   it("requires promotion when a black pawn reaches the last rank", () => {
