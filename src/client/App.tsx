@@ -3,6 +3,7 @@ import { useEffect, useState, useRef } from "preact/hooks";
 
 import {
   ApiClientError,
+  acceptTermsAgreement,
   createGame,
   getGame,
   getGameEvents,
@@ -56,12 +57,15 @@ import type {
   HandPieceType,
   PlayerColor,
   PieceType,
+  SessionPayload,
   UserSummary,
 } from "../shared/types";
 import { currentTermsHash, TERMS_TEXT } from "../shared/terms";
 
 // ─── Global state ─────────────────────────────────────
 const user = signal<UserSummary | null | undefined>(undefined);
+const termsAgreementRequired = signal(false);
+const sessionTermsHash = signal("");
 const games = signal<GameSummary[]>([]);
 const activeGame = signal<GameSnapshot | null>(null);
 const events = signal<GameEvent[]>([]);
@@ -170,6 +174,8 @@ export function App() {
               <TermsPage />
             ) : !signedIn.value ? (
               <AuthScreen />
+            ) : termsAgreementRequired.value ? (
+              <TermsAgreementScreen />
             ) : (
               <PlayScreen />
             )}
@@ -178,6 +184,62 @@ export function App() {
         {notice.value ? <Toast message={notice.value} type="error" /> : null}
       </div>
     </ThemeCtx.Provider>
+  );
+}
+
+function TermsAgreementScreen() {
+  const t = useTheme();
+  return (
+    <main style={{ minHeight: "calc(100svh - 72px)", display: "grid", placeItems: "center", padding: 24 }}>
+      <section
+        style={{
+          width: "min(520px, 100%)",
+          backgroundColor: t.bg.elevated,
+          border: `1px solid ${t.border.default}`,
+          borderRadius: R.lg,
+          boxShadow: t.shadow.md,
+          padding: 28,
+        }}
+      >
+        <h2 style={{ color: t.text.primary, fontFamily: fS, fontSize: 24, fontWeight: 800, marginBottom: 12 }}>
+          利用規約が更新されました
+        </h2>
+        <p style={{ color: t.text.secondary, fontFamily: fG, fontSize: 14, lineHeight: 1.8, marginBottom: 18 }}>
+          続けて利用するには、最新の利用規約を確認して同意してください。
+        </p>
+        <form onSubmit={(event) => void submitTermsAgreement(event)} style={{ display: "grid", gap: 14 }}>
+          <input type="hidden" name="termsHash" value={sessionTermsHash.value} />
+          <div style={{ color: t.text.secondary, display: "flex", gap: 10, fontFamily: fG, fontSize: 14, lineHeight: 1.7 }}>
+            <input
+              id="refresh-terms"
+              name="termsAccepted"
+              type="checkbox"
+              required
+              style={{ width: 18, height: 18, marginTop: 4, accentColor: t.accent.gold, flexShrink: 0 }}
+            />
+            <div>
+              <label for="refresh-terms">最新の利用規約に同意します。</label>
+              <div>
+                <a
+                  href="/terms"
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ color: t.accent.gold, fontWeight: 700 }}
+                >
+                  利用規約を読む
+                </a>
+              </div>
+            </div>
+          </div>
+          <p style={{ color: t.text.tertiary, fontFamily: fG, fontSize: 12, lineHeight: 1.7 }}>
+            同意日時と、表示中の利用規約全文のhashを保存します。
+          </p>
+          <Btn variant="primary" size="lg" full type="submit" disabled={busy.value || !sessionTermsHash.value}>
+            同意して続ける
+          </Btn>
+        </form>
+      </section>
+    </main>
   );
 }
 
@@ -1230,11 +1292,13 @@ function connectionColor(conn: "idle" | "connecting" | "live" | "reconnecting" |
 async function bootstrap(): Promise<void> {
   try {
     const session = await getSession();
-    user.value = session.user;
-    if (session.user) { await refreshGames(); }
+    applySession(session);
+    if (session.user && !session.termsAgreementRequired) { await refreshGames(); }
   } catch (error) {
     showError(error);
     user.value = null;
+    termsAgreementRequired.value = false;
+    sessionTermsHash.value = "";
   }
 }
 
@@ -1250,7 +1314,24 @@ async function submitAuth(event: SubmitEvent): Promise<void> {
       authMode.value === "register"
         ? await registerAccount(input)
         : await loginAccount(input);
-    user.value = session.user;
+    applySession(session);
+    if (!session.termsAgreementRequired) {
+      await refreshGames();
+    }
+  });
+}
+
+async function submitTermsAgreement(event: SubmitEvent): Promise<void> {
+  event.preventDefault();
+  const form = new FormData(event.currentTarget as HTMLFormElement);
+  const termsHashEntry = form.get("termsHash");
+  const input = {
+    termsAccepted: form.get("termsAccepted") === "on",
+    termsHash: typeof termsHashEntry === "string" ? termsHashEntry : "",
+  };
+  await withBusy(async () => {
+    const session = await acceptTermsAgreement(input);
+    applySession(session);
     await refreshGames();
   });
 }
@@ -1262,7 +1343,7 @@ async function submitProfile(event: SubmitEvent): Promise<boolean> {
   let ok = false;
   await withBusy(async () => {
     const session = await updateProfile(input);
-    user.value = session.user;
+    applySession(session);
     await refreshGames();
     if (activeGame.value) {
       const response = await getGame(activeGame.value.id);
@@ -1275,13 +1356,19 @@ async function submitProfile(event: SubmitEvent): Promise<boolean> {
 
 async function handleLogout(): Promise<void> {
   await withBusy(async () => {
-    await logoutAccount();
-    user.value = null;
+    const session = await logoutAccount();
+    applySession(session);
     games.value = [];
     activeGame.value = null;
     events.value = [];
     closeRealtime();
   });
+}
+
+function applySession(session: SessionPayload): void {
+  user.value = session.user;
+  termsAgreementRequired.value = session.termsAgreementRequired;
+  sessionTermsHash.value = session.termsHash;
 }
 
 async function refreshGames(): Promise<void> {
@@ -1469,7 +1556,13 @@ async function withBusy(action: () => Promise<void>): Promise<void> {
 }
 
 function showError(error: unknown): void {
-  if (error instanceof ApiClientError) { notice.value = error.message; return; }
+  if (error instanceof ApiClientError) {
+    if (error.code === "terms_agreement_required") {
+      termsAgreementRequired.value = true;
+    }
+    notice.value = error.message;
+    return;
+  }
   if (error instanceof Error) { notice.value = error.message; return; }
   notice.value = "処理に失敗しました。";
 }

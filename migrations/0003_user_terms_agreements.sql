@@ -7,3 +7,6 @@ CREATE TABLE user_terms_agreements (
 
 CREATE INDEX user_terms_agreements_user_id_agreed_at_idx
 ON user_terms_agreements(user_id, agreed_at);
+
+CREATE INDEX user_terms_agreements_user_id_terms_hash_idx
+ON user_terms_agreements(user_id, terms_hash);

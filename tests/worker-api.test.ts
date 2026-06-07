@@ -91,6 +91,132 @@ describe("auth API", () => {
     expect(String(agreement?.agreed_at)).toMatch(/^\d{4}-\d{2}-\d{2}T/);
   });
 
+  it("requires an existing user to accept the current terms before using protected APIs", async () => {
+    const db = new FakeD1(null);
+    const env = {
+      DB: db as unknown as D1Database,
+      GAME_ROOM: new FakeGameRoomNamespace(db) as unknown as DurableObjectNamespace,
+      SESSION_COOKIE_NAME: "sid",
+    } satisfies Env;
+    const origin = "http://localhost";
+    const session = await registerViaApi(env, origin, "terms_refresh_required");
+    db.replaceTermsHashForUser(session.userId, "0".repeat(64));
+
+    const sessionResponse = await app.request(
+      `${origin}/api/session`,
+      { headers: { cookie: session.cookie } },
+      env,
+    );
+    const sessionBody: {
+      termsAgreementRequired?: boolean;
+      termsHash?: string;
+      user?: { id?: string };
+    } = await sessionResponse.json();
+
+    const gamesResponse = await app.request(
+      `${origin}/api/games`,
+      { headers: { cookie: session.cookie, origin } },
+      env,
+    );
+    const gamesBody: { error?: { code?: string } } = await gamesResponse.json();
+
+    expect(sessionResponse.status).toBe(200);
+    expect(sessionBody.user?.id).toBe(session.userId);
+    expect(sessionBody.termsAgreementRequired).toBe(true);
+    expect(sessionBody.termsHash).toBe(CURRENT_TERMS_HASH);
+    expect(gamesResponse.status).toBe(403);
+    expect(gamesBody.error?.code).toBe("terms_agreement_required");
+  });
+
+  it("records a refreshed terms agreement and allows protected APIs again", async () => {
+    const db = new FakeD1(null);
+    const env = {
+      DB: db as unknown as D1Database,
+      GAME_ROOM: new FakeGameRoomNamespace(db) as unknown as DurableObjectNamespace,
+      SESSION_COOKIE_NAME: "sid",
+    } satisfies Env;
+    const origin = "http://localhost";
+    const session = await registerViaApi(env, origin, "terms_refresh_ok");
+    db.replaceTermsHashForUser(session.userId, "0".repeat(64));
+    const agreementCountBefore = db.termsAgreements.length;
+
+    const acceptResponse = await app.request(
+      `${origin}/api/terms/agreements`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          cookie: session.cookie,
+          origin,
+        },
+        body: JSON.stringify({
+          termsAccepted: true,
+          termsHash: CURRENT_TERMS_HASH,
+        }),
+      },
+      env,
+    );
+    const acceptBody: { termsAgreementRequired?: boolean; user?: { id?: string } } =
+      await acceptResponse.json();
+    const gamesResponse = await app.request(
+      `${origin}/api/games`,
+      { headers: { cookie: session.cookie, origin } },
+      env,
+    );
+
+    expect(acceptResponse.status).toBe(200);
+    expect(acceptBody.user?.id).toBe(session.userId);
+    expect(acceptBody.termsAgreementRequired).toBe(false);
+    expect(db.termsAgreements).toHaveLength(agreementCountBefore + 1);
+    expect(db.termsAgreements.at(-1)?.user_id).toBe(session.userId);
+    expect(db.termsAgreements.at(-1)?.terms_hash).toBe(CURRENT_TERMS_HASH);
+    expect(gamesResponse.status).toBe(200);
+  });
+
+  it("rejects a refreshed terms agreement when the submitted hash is stale", async () => {
+    const db = new FakeD1(null);
+    const env = {
+      DB: db as unknown as D1Database,
+      GAME_ROOM: new FakeGameRoomNamespace(db) as unknown as DurableObjectNamespace,
+      SESSION_COOKIE_NAME: "sid",
+    } satisfies Env;
+    const origin = "http://localhost";
+    const staleTermsHash = "0".repeat(64);
+    const session = await registerViaApi(env, origin, "terms_refresh_stale");
+    db.replaceTermsHashForUser(session.userId, staleTermsHash);
+    const agreementCountBefore = db.termsAgreements.length;
+
+    const acceptResponse = await app.request(
+      `${origin}/api/terms/agreements`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          cookie: session.cookie,
+          origin,
+        },
+        body: JSON.stringify({
+          termsAccepted: true,
+          termsHash: staleTermsHash,
+        }),
+      },
+      env,
+    );
+    const acceptBody: { error?: { code?: string } } = await acceptResponse.json();
+    const gamesResponse = await app.request(
+      `${origin}/api/games`,
+      { headers: { cookie: session.cookie, origin } },
+      env,
+    );
+    const gamesBody: { error?: { code?: string } } = await gamesResponse.json();
+
+    expect(acceptResponse.status).toBe(400);
+    expect(acceptBody.error?.code).toBe("terms_hash_mismatch");
+    expect(db.termsAgreements).toHaveLength(agreementCountBefore);
+    expect(gamesResponse.status).toBe(403);
+    expect(gamesBody.error?.code).toBe("terms_agreement_required");
+  });
+
   it("rejects registration when the submitted terms hash does not match the current terms", async () => {
     const db = new FakeD1(null);
     const env = {
@@ -841,6 +967,22 @@ class FakeD1 {
     this.termsAgreements.push(row);
   }
 
+  hasTermsAgreement(userId: unknown, termsHash: unknown): boolean {
+    return this.termsAgreements.some(
+      (agreement) =>
+        agreement.user_id === String(userId) &&
+        agreement.terms_hash === String(termsHash),
+    );
+  }
+
+  replaceTermsHashForUser(userId: string, termsHash: string): void {
+    for (const agreement of this.termsAgreements) {
+      if (agreement.user_id === userId) {
+        agreement.terms_hash = termsHash;
+      }
+    }
+  }
+
   userCount(): number {
     return this.users.size;
   }
@@ -898,6 +1040,13 @@ class FakeStatement {
   }
 
   first<T>(): Promise<T | null> {
+    if (this.sql.includes("FROM user_terms_agreements")) {
+      return Promise.resolve(
+        this.db.hasTermsAgreement(this.values[0], this.values[1])
+          ? ({ accepted: 1 } as T)
+          : null,
+      );
+    }
     if (this.sql.includes("FROM sessions")) {
       return Promise.resolve(this.db.userForSession(this.values[0], this.values[1]) as T | null);
     }
