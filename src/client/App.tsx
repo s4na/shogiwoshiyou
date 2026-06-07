@@ -108,6 +108,17 @@ export function App() {
     };
   }, []);
 
+  useEffect(() => {
+    document.title = showingTerms ? "利用規約 | 将棋をしよう" : "将棋をしよう";
+    if (!showingTerms) return;
+    const frame = window.requestAnimationFrame(() => {
+      document.querySelector<HTMLElement>('main[data-page="terms"]')?.focus();
+    });
+    return () => {
+      window.cancelAnimationFrame(frame);
+    };
+  }, [showingTerms]);
+
   return (
     <ThemeCtx.Provider value={theme}>
       <style>{`
@@ -458,7 +469,11 @@ function TermsPage() {
   const t = useTheme();
   const lines = TERMS_TEXT.split("\n");
   return (
-    <main style={{ maxWidth: 860, margin: "0 auto", padding: "28px 24px 64px" }}>
+    <main
+      data-page="terms"
+      tabIndex={-1}
+      style={{ maxWidth: 860, margin: "0 auto", padding: "28px 24px 64px" }}
+    >
       <article
         style={{
           backgroundColor: t.bg.elevated,
