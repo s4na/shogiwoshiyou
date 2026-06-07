@@ -29,6 +29,7 @@ const passwordSchema = z.string().min(8).max(128);
 const registerSchema = z.object({
   handle: handleSchema,
   password: passwordSchema,
+  termsAccepted: z.literal(true),
 });
 
 const loginSchema = z.object({

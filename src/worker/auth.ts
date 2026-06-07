@@ -13,6 +13,7 @@ const RESERVED_HANDLES = new Set(["cpu"]);
 export type RegisterInput = {
   handle: string;
   password: string;
+  termsAccepted: true;
 };
 
 export type LoginInput = {
