@@ -1,7 +1,16 @@
 import { describe, expect, it } from "vitest";
+import { InitialPositionSFEN } from "tsshogi";
 
 import type { GameSnapshot } from "../src/shared/types";
-import { dropUsi, moveNotationLabel, moveUsiTitle, myColor, promotionMoveOptions } from "../src/client/shogi-ui";
+import {
+  dropUsi,
+  legalDropDestinations,
+  legalMoveDestinations,
+  moveNotationLabel,
+  moveUsiTitle,
+  myColor,
+  promotionMoveOptions,
+} from "../src/client/shogi-ui";
 
 describe("client shogi helpers", () => {
   it("builds USI drops from hand pieces", () => {
@@ -68,6 +77,23 @@ describe("client shogi helpers", () => {
       mustPromote: false,
       canPromote: false,
     });
+  });
+
+  it("lists legal destinations for a selected board piece", () => {
+    const game = { ...sampleGame(), sfen: InitialPositionSFEN.STANDARD };
+
+    expect(legalMoveDestinations(game, "7g")).toEqual(["7f"]);
+  });
+
+  it("lists legal drop destinations for a selected hand piece", () => {
+    const game = {
+      ...sampleGame(),
+      sfen: "4k4/9/9/9/9/9/9/9/4K4 b P 1",
+    };
+    const destinations = legalDropDestinations(game, "pawn");
+
+    expect(destinations).toContain("5e");
+    expect(destinations).not.toContain("5a");
   });
 });
 
