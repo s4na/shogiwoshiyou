@@ -1,6 +1,6 @@
 CREATE TABLE user_terms_agreements (
   id TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
   terms_hash TEXT NOT NULL,
   agreed_at TEXT NOT NULL
 );
