@@ -57,6 +57,7 @@ export type HandPiece = {
 export type GameMove = {
   ply: number;
   usi: string;
+  notation: string;
 };
 
 export type GamePlayer = UserSummary & {
