@@ -1,8 +1,9 @@
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import type { Context, MiddlewareHandler } from "hono";
 
+import { TERMS_TEXT } from "../shared/terms";
 import type { SessionPayload, UserSummary } from "../shared/types";
-import { constantTimeEqual, hashPassword, PASSWORD_ITERATIONS, randomToken, sha256Base64Url } from "./crypto";
+import { constantTimeEqual, hashPassword, PASSWORD_ITERATIONS, randomToken, sha256Base64Url, sha256Hex } from "./crypto";
 import type { AppEnv, Env } from "./env";
 import { HttpError } from "./http";
 
@@ -92,6 +93,8 @@ export async function register(c: Context<AppEnv>, input: RegisterInput): Promis
   const userId = crypto.randomUUID();
   const salt = randomToken(18);
   const passwordHash = await hashPassword(input.password, salt);
+  const termsAgreementId = crypto.randomUUID();
+  const termsHash = await sha256Hex(TERMS_TEXT);
 
   try {
     await c.env.DB.batch([
@@ -104,6 +107,10 @@ export async function register(c: Context<AppEnv>, input: RegisterInput): Promis
          (user_id, password_salt, password_hash, password_iterations, created_at, updated_at)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6)`,
       ).bind(userId, salt, passwordHash, PASSWORD_ITERATIONS, now, now),
+      c.env.DB.prepare(
+        `INSERT INTO user_terms_agreements (id, user_id, terms_hash, agreed_at)
+         VALUES (?1, ?2, ?3, ?4)`,
+      ).bind(termsAgreementId, userId, termsHash, now),
     ]);
   } catch (error) {
     if (String(error).includes("UNIQUE")) {

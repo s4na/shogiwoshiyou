@@ -4,6 +4,8 @@ import app, { GameRoom } from "../src/worker";
 import type { Env } from "../src/worker/env";
 import type { StoredGame } from "../src/worker/shogi";
 
+const CURRENT_TERMS_HASH = "98c77be36b143b80f60eb405682299085694fdcbda648f4cbef11eb1b20d750d";
+
 describe("auth API", () => {
   it("rejects registration when the terms are not accepted", async () => {
     const db = new FakeD1(null);
@@ -13,6 +15,7 @@ describe("auth API", () => {
       SESSION_COOKIE_NAME: "sid",
     } satisfies Env;
     const origin = "http://localhost";
+    const userCountBefore = db.userCount();
 
     const response = await app.request(
       `${origin}/api/auth/register`,
@@ -31,6 +34,40 @@ describe("auth API", () => {
     expect(response.status).toBe(400);
     expect(body.error?.code).toBe("validation_error");
     expect(response.headers.get("set-cookie")).toBeNull();
+    expect(db.userCount()).toBe(userCountBefore);
+    expect(db.termsAgreements).toHaveLength(0);
+  });
+
+  it("records the accepted terms hash and agreement time when registering", async () => {
+    const db = new FakeD1(null);
+    const env = {
+      DB: db as unknown as D1Database,
+      GAME_ROOM: new FakeGameRoomNamespace(db) as unknown as DurableObjectNamespace,
+      SESSION_COOKIE_NAME: "sid",
+    } satisfies Env;
+    const origin = "http://localhost";
+
+    const response = await app.request(
+      `${origin}/api/auth/register`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          origin,
+        },
+        body: JSON.stringify({ handle: "terms_ok", password: "password123", termsAccepted: true }),
+      },
+      env,
+    );
+    const body: { user?: { id?: string } } = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(db.termsAgreements).toHaveLength(1);
+    const agreement = db.termsAgreements[0];
+    expect(String(agreement?.id)).toMatch(/^[0-9a-f-]{36}$/i);
+    expect(agreement?.user_id).toBe(body.user?.id);
+    expect(agreement?.terms_hash).toBe(CURRENT_TERMS_HASH);
+    expect(String(agreement?.agreed_at)).toMatch(/^\d{4}-\d{2}-\d{2}T/);
   });
 });
 
@@ -603,6 +640,7 @@ function storedGame(overrides: Partial<StoredGame> = {}): StoredGame {
 class FakeD1 {
   updatedGame: Record<string, unknown> | null = null;
   insertedEvents: Record<string, unknown>[] = [];
+  termsAgreements: Record<string, unknown>[] = [];
   batchStatementTypes: string[][] = [];
   private currentGame: StoredGame | null;
   private readonly games = new Map<string, StoredGame>();
@@ -736,6 +774,14 @@ class FakeD1 {
     });
   }
 
+  insertTermsAgreement(row: Record<string, unknown>): void {
+    this.termsAgreements.push(row);
+  }
+
+  userCount(): number {
+    return this.users.size;
+  }
+
   userForSession(tokenHash: unknown, now: unknown): Record<string, unknown> | null {
     const session = this.sessions.get(String(tokenHash));
     if (!session || session.expires_at <= String(now)) {
@@ -776,6 +822,9 @@ class FakeStatement {
     }
     if (this.sql.includes("INSERT INTO game_events")) {
       return String(this.values[3]);
+    }
+    if (this.sql.includes("INSERT INTO user_terms_agreements")) {
+      return "INSERT INTO user_terms_agreements";
     }
     return "other";
   }
@@ -850,6 +899,15 @@ class FakeStatement {
       return Promise.resolve({ meta: { changes: 1 }, success: true });
     }
     if (this.sql.includes("INSERT INTO user_credentials")) {
+      return Promise.resolve({ meta: { changes: 1 }, success: true });
+    }
+    if (this.sql.includes("INSERT INTO user_terms_agreements")) {
+      this.db.insertTermsAgreement({
+        id: this.values[0],
+        user_id: this.values[1],
+        terms_hash: this.values[2],
+        agreed_at: this.values[3],
+      });
       return Promise.resolve({ meta: { changes: 1 }, success: true });
     }
     if (this.sql.includes("INSERT INTO games")) {
