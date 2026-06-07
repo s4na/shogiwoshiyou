@@ -83,12 +83,6 @@ export class GameRoom implements DurableObject {
       if (error instanceof DuplicateRequest) {
         return error.response;
       }
-      if (error instanceof StaleGameWrite) {
-        const latest = await this.loadGameById(error.gameId);
-        if (latest) {
-          return this.snapshotResponse(latest);
-        }
-      }
       if (error instanceof RoomError) {
         return jsonError(error.status, error.code, error.message);
       }
@@ -317,7 +311,8 @@ export class GameRoom implements DurableObject {
       .bind(game.id, clientRequestId, actorUserId)
       .first<{ id: string }>();
     if (existing) {
-      throw new DuplicateRequest(await this.snapshotResponse(game));
+      const latest = (await this.loadGameById(game.id)) ?? game;
+      throw new DuplicateRequest(await this.snapshotResponse(latest));
     }
   }
 
