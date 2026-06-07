@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "vite build",
-    "build:design": "vite build --config vite.design.config.ts",
+    "build:design": "vite build --config vite.design.config.ts && mv dist/design/design.html dist/design/index.html",
     "check": "pnpm typecheck && pnpm lint && pnpm lint:ox && pnpm test && pnpm build && pnpm build:design",
     "cf-typegen": "wrangler types",
     "deploy": "pnpm verify:wrangler && pnpm build && wrangler deploy",
