@@ -63,9 +63,7 @@ export async function listGameSummariesForUser(
               COALESCE(MAX(e.seq), 0) AS last_event_seq
        FROM games g
        LEFT JOIN game_events e ON e.game_id = g.id
-       WHERE (g.status = 'waiting'
-         AND g.mode = 'public')
-          OR g.black_user_id = ?1
+       WHERE g.black_user_id = ?1
           OR g.white_user_id = ?2
        GROUP BY g.id
        ORDER BY g.updated_at DESC

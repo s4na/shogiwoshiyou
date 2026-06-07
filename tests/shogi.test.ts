@@ -85,7 +85,7 @@ describe("game snapshots", () => {
     const blackKing = snapshot.board.find((square) => square.square === "5i");
 
     expect(snapshot.board).toHaveLength(81);
-    expect(snapshot.mode).toBe("public");
+    expect(snapshot.mode).toBe("cpu");
     expect(whiteKing?.piece).toEqual({ color: "white", type: "king", label: "玉" });
     expect(blackKing?.piece).toEqual({ color: "black", type: "king", label: "玉" });
     expect(snapshot.hands.black).toContainEqual({ type: "pawn", count: 1, label: "歩" });

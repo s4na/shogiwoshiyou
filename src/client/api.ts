@@ -70,10 +70,6 @@ export async function getGame(gameId: string): Promise<GameResponse> {
   return api<GameResponse>(`/api/games/${gameId}`, {}, 1);
 }
 
-export async function joinGame(gameId: string): Promise<GameResponse> {
-  return api<GameResponse>(`/api/games/${gameId}/join`, { method: "POST" });
-}
-
 export async function playMove(gameId: string, usi: string, requestId: string): Promise<MoveResponse> {
   return api<MoveResponse>(
     `/api/games/${gameId}/moves`,

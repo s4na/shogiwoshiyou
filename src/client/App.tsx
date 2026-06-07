@@ -7,7 +7,6 @@ import {
   getGame,
   getGameEvents,
   getSession,
-  joinGame,
   listGames,
   loginAccount,
   logoutAccount,
@@ -45,7 +44,7 @@ const notice = signal<string | null>(null);
 const busy = signal(false);
 const connection = signal<"idle" | "connecting" | "live" | "reconnecting" | "polling">("idle");
 const authMode = signal<"register" | "login">("register");
-const gameMode = signal<GameMode>("public");
+const gameMode = signal<GameMode>("cpu");
 
 const signedIn = computed(() => user.value !== null && user.value !== undefined);
 
@@ -193,18 +192,6 @@ function GameList() {
             <input
               type="radio"
               name="mode"
-              value="public"
-              checked={gameMode.value === "public"}
-              onChange={() => {
-                gameMode.value = "public";
-              }}
-            />
-            公開募集
-          </label>
-          <label>
-            <input
-              type="radio"
-              name="mode"
               value="cpu"
               checked={gameMode.value === "cpu"}
               onChange={() => {
@@ -250,18 +237,12 @@ function GameList() {
       <div class="game-list">
         {games.value.length === 0 ? <p class="empty">対局なし</p> : null}
         {games.value.map((game) => {
-          const canJoinFromList =
-            user.value !== null &&
-            user.value !== undefined &&
-            game.status === "waiting" &&
-            game.mode === "public" &&
-            game.players.black.id !== user.value.id;
           return (
             <button
               type="button"
               key={game.id}
               class={activeGame.value?.id === game.id ? "game-item active" : "game-item"}
-              onClick={() => void (canJoinFromList ? handleJoinGame(game.id) : selectGame(game.id))}
+              onClick={() => void selectGame(game.id)}
             >
               <span class="game-main">
                 <strong>{game.players.black.displayName}</strong>
@@ -290,7 +271,6 @@ function BoardArea() {
   }
   const color = myColor(game, user.value.id);
   const orientation = color ?? "black";
-  const canJoin = game.status === "waiting" && game.players.black.id !== user.value.id;
   const myTurn = color !== null && game.status === "active" && game.currentTurn === color;
   const choice = promotionChoice.value;
 
@@ -305,11 +285,6 @@ function BoardArea() {
         </div>
         <div class="toolbar-actions">
           <span class={`connection ${connection.value}`}>{connectionLabel()}</span>
-          {canJoin ? (
-            <button type="button" onClick={() => void handleJoinGame(game.id)} disabled={busy.value}>
-              参加
-            </button>
-          ) : null}
           {color && game.status === "active" ? (
             <button type="button" class="danger-button" onClick={() => void handleResign(game.id)} disabled={busy.value}>
               投了
@@ -488,7 +463,7 @@ async function refreshGames(): Promise<void> {
 async function submitCreateGame(event: SubmitEvent): Promise<void> {
   event.preventDefault();
   const form = new FormData(event.currentTarget as HTMLFormElement);
-  const mode = (form.get("mode") ?? "public") as GameMode;
+  const mode = (form.get("mode") ?? "cpu") as GameMode;
   const passcodeEntry = form.get("passcode");
   const passcode = typeof passcodeEntry === "string" ? passcodeEntry.trim() : "";
   await withBusy(async () => {
@@ -496,15 +471,6 @@ async function submitCreateGame(event: SubmitEvent): Promise<void> {
     applyGameSnapshot(response.game);
     await refreshGames();
     connectRealtime(response.game.id);
-  });
-}
-
-async function handleJoinGame(gameId: string): Promise<void> {
-  await withBusy(async () => {
-    const response = await joinGame(gameId);
-    applyGameSnapshot(response.game);
-    await refreshGames();
-    connectRealtime(gameId);
   });
 }
 
@@ -743,8 +709,6 @@ function statusLabel(game: GameSnapshot): string {
 
 function modeLabel(mode: GameMode): string {
   switch (mode) {
-    case "public":
-      return "公開募集";
     case "cpu":
       return "CPU対戦";
     case "friend":
@@ -758,8 +722,6 @@ function waitingLabel(mode: GameMode): string {
 
 function createGameButtonLabel(): string {
   switch (gameMode.value) {
-    case "public":
-      return "公開募集を作る";
     case "cpu":
       return "CPUと始める";
     case "friend":

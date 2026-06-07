@@ -40,7 +40,7 @@ const profileSchema = z.object({
 });
 
 const createGameSchema = z.object({
-  mode: z.enum(["public", "cpu", "friend"]).default("public"),
+  mode: z.enum(["cpu", "friend"]).default("cpu"),
   passcode: z.string().trim().min(4).max(64).optional(),
 });
 
@@ -127,15 +127,6 @@ app.post("/api/games", zValidator("json", createGameSchema), async (c) => {
 app.get("/api/games/:id", async (c) => {
   const gameId = validGameId(c.req.param("id"));
   return callGameRoom(c.env, gameId, c.get("user").id, "/snapshot");
-});
-
-app.post("/api/games/:id/join", async (c) => {
-  ensureSameOrigin(c);
-  const gameId = validGameId(c.req.param("id"));
-  return callGameRoom(c.env, gameId, c.get("user").id, "/join", {
-    method: "POST",
-    headers: { "x-join-mode": "public" },
-  });
 });
 
 app.post("/api/games/:id/moves", zValidator("json", moveSchema), async (c) => {

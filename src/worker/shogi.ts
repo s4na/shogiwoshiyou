@@ -58,7 +58,7 @@ export function createInitialGame(
   id: string,
   blackUserId: string,
   now: string,
-  mode: GameMode = "public",
+  mode: GameMode = "cpu",
   whiteUserId: string | null = null,
 ): StoredGame {
   return {

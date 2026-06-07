@@ -84,7 +84,7 @@ function sampleGame(overrideSquare?: GameSnapshot["board"][number]): GameSnapsho
   }
   return {
     id: "game-1",
-    mode: "public",
+    mode: "cpu",
     status: "active",
     sfen: "",
     currentTurn: "black",

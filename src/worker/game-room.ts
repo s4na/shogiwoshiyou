@@ -103,7 +103,7 @@ export class GameRoom implements DurableObject {
     if (existing) {
       return this.snapshotResponse(existing);
     }
-    const mode = rawMode === "cpu" || rawMode === "friend" ? rawMode : "public";
+    const mode = rawMode === "friend" ? "friend" : "cpu";
     const now = new Date().toISOString();
     const id = this.state.id.name ?? crypto.randomUUID();
     if (mode === "cpu") {
@@ -122,8 +122,7 @@ export class GameRoom implements DurableObject {
 
   private async joinGame(userId: string, rawJoinMode: string | null): Promise<Response> {
     const game = await this.requireGame();
-    const joinMode = rawJoinMode === "friend" ? "friend" : "public";
-    if (game.mode !== joinMode) {
+    if (rawJoinMode !== "friend" || game.mode !== "friend") {
       throw new RoomError(403, "join_mode_mismatch", "この参加方法では参加できません。");
     }
     if (game.blackUserId === userId) {
