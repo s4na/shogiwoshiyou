@@ -245,6 +245,7 @@ function GameList() {
               key={game.id}
               class={activeGame.value?.id === game.id ? "game-item active" : "game-item"}
               onClick={() => void selectGame(game.id)}
+              disabled={busy.value}
             >
               <span class="game-main">
                 <strong>{game.players.black.displayName}</strong>
