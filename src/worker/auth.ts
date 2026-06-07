@@ -8,6 +8,7 @@ import { HttpError } from "./http";
 
 const SESSION_DAYS = 30;
 const COOKIE_DEFAULT = "shogiwoshiyou_session";
+const RESERVED_HANDLES = new Set(["cpu"]);
 
 export type RegisterInput = {
   handle: string;
@@ -83,6 +84,9 @@ export async function currentUser(c: Context<AppEnv>): Promise<UserSummary | nul
 
 export async function register(c: Context<AppEnv>, input: RegisterInput): Promise<UserSummary> {
   const normalizedHandle = normalizeHandle(input.handle);
+  if (RESERVED_HANDLES.has(normalizedHandle)) {
+    throw new HttpError(409, "handle_reserved", "そのハンドルは予約されています。");
+  }
   const now = new Date().toISOString();
   const userId = crypto.randomUUID();
   const salt = randomToken(18);

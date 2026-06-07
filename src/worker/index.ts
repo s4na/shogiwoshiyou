@@ -4,7 +4,7 @@ import { z } from "zod";
 
 import type { GamesResponse, SessionPayload } from "../shared/types";
 import { authMiddleware, currentSession, login, logout, register, updateProfile } from "./auth";
-import { sha256Base64Url } from "./crypto";
+import { sha256Hex } from "./crypto";
 import type { AppEnv, Env } from "./env";
 import { GameRoom } from "./game-room";
 import { canViewGame, loadGameEvents, listGameSummariesForUser } from "./game-store";
@@ -127,6 +127,7 @@ app.post("/api/games/:id/join", async (c) => {
   const gameId = validGameId(c.req.param("id"));
   return callGameRoom(c.env, gameId, c.get("user").id, "/join", {
     method: "POST",
+    headers: { "x-join-mode": "public" },
   });
 });
 
@@ -200,45 +201,11 @@ async function createOrJoinFriendGame(
   userId: string,
   passcode: string,
 ): Promise<Response> {
-  const passcodeHash = await sha256Base64Url(passcode);
-  const existing = await env.DB.prepare(
-    `SELECT friend_rooms.game_id, games.black_user_id, games.status
-     FROM friend_rooms
-     JOIN games ON games.id = friend_rooms.game_id
-     WHERE friend_rooms.passcode_hash = ?1
-     LIMIT 1`,
-  )
-    .bind(passcodeHash)
-    .first<{ game_id: string; black_user_id: string; status: string }>();
-  if (existing?.status === "waiting") {
-    if (existing.black_user_id === userId) {
-      return callGameRoom(env, existing.game_id, userId, "/snapshot");
-    }
-    return callGameRoom(env, existing.game_id, userId, "/join", { method: "POST" });
-  }
-  if (existing) {
-    await env.DB.prepare("DELETE FROM friend_rooms WHERE passcode_hash = ?1")
-      .bind(passcodeHash)
-      .run();
-  }
-  const now = new Date().toISOString();
-  const gameId = crypto.randomUUID();
-  const response = await callGameRoom(env, gameId, userId, "/create", {
+  const gameId = friendGameId(await sha256Hex(passcode));
+  return callGameRoom(env, gameId, userId, "/friend", {
     method: "POST",
-    headers: { "x-game-mode": "friend" },
+    headers: { "x-join-mode": "friend" },
   });
-  if (response.ok) {
-    await env.DB.prepare(
-      `INSERT INTO friend_rooms (passcode_hash, game_id, created_at, updated_at)
-       VALUES (?1, ?2, ?3, ?4)
-       ON CONFLICT(passcode_hash) DO UPDATE
-       SET game_id = excluded.game_id,
-           updated_at = excluded.updated_at`,
-    )
-      .bind(passcodeHash, gameId, now, now)
-      .run();
-  }
-  return response;
 }
 
 function validGameId(value: string): string {
@@ -246,4 +213,19 @@ function validGameId(value: string): string {
     throw new HttpError(400, "bad_game_id", "対局IDが不正です。");
   }
   return value;
+}
+
+function friendGameId(hashHex: string): string {
+  const hex = hashHex.slice(0, 32).split("");
+  hex[12] = "4";
+  const variant = Number.parseInt(hex[16] ?? "0", 16);
+  hex[16] = ((variant & 0x3) | 0x8).toString(16);
+  const value = hex.join("");
+  return [
+    value.slice(0, 8),
+    value.slice(8, 12),
+    value.slice(12, 16),
+    value.slice(16, 20),
+    value.slice(20, 32),
+  ].join("-");
 }

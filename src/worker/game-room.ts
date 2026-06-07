@@ -43,7 +43,10 @@ export class GameRoom implements DurableObject {
         return await this.createGame(userId, request.headers.get("x-game-mode"));
       }
       if (url.pathname === "/join" && request.method === "POST") {
-        return await this.joinGame(userId);
+        return await this.joinGame(userId, request.headers.get("x-join-mode"));
+      }
+      if (url.pathname === "/friend" && request.method === "POST") {
+        return await this.createOrJoinFriendGame(userId);
       }
       if (url.pathname === "/move" && request.method === "POST") {
         const body: Partial<MoveRequest> = await request.json();
@@ -117,8 +120,12 @@ export class GameRoom implements DurableObject {
     return this.snapshotResponse(game, 201);
   }
 
-  private async joinGame(userId: string): Promise<Response> {
+  private async joinGame(userId: string, rawJoinMode: string | null): Promise<Response> {
     const game = await this.requireGame();
+    const joinMode = rawJoinMode === "friend" ? "friend" : "public";
+    if (game.mode !== joinMode) {
+      throw new RoomError(403, "join_mode_mismatch", "この参加方法では参加できません。");
+    }
     if (game.blackUserId === userId) {
       throw new RoomError(409, "cannot_join_own_game", "自分で作った対局には参加できません。");
     }
@@ -148,6 +155,17 @@ export class GameRoom implements DurableObject {
     }
     await this.broadcast(next);
     return this.snapshotResponse(next);
+  }
+
+  private async createOrJoinFriendGame(userId: string): Promise<Response> {
+    const existing = await this.loadGame();
+    if (!existing) {
+      return this.createGame(userId, "friend");
+    }
+    if (existing.blackUserId === userId || existing.whiteUserId === userId) {
+      return this.snapshotResponse(existing);
+    }
+    return this.joinGame(userId, "friend");
   }
 
   private async playMove(userId: string, body: Partial<MoveRequest>): Promise<Response> {

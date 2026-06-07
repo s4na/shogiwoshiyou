@@ -153,7 +153,7 @@ function AuthPanel() {
           aria-describedby="auth-handle-help"
         />
         <p id="auth-handle-help" class="field-help">
-          3〜24文字。半角英数字と _ のみ。ログインに使います。
+          3〜24文字。半角英数字と _ のみ。cpu は予約済みです。
         </p>
         <label for="auth-password">パスワード</label>
         <input
@@ -459,6 +459,10 @@ async function submitProfile(event: SubmitEvent): Promise<void> {
     const session = await updateProfile(input);
     user.value = session.user;
     await refreshGames();
+    if (activeGame.value) {
+      const response = await getGame(activeGame.value.id);
+      applyGameSnapshot(response.game);
+    }
   });
 }
 
