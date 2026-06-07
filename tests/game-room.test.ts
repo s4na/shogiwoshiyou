@@ -4,7 +4,7 @@ import app, { GameRoom } from "../src/worker";
 import type { Env } from "../src/worker/env";
 import type { StoredGame } from "../src/worker/shogi";
 
-describe("GameRoom moves", () => {
+describe("auth API", () => {
   it("rejects registration when the terms are not accepted", async () => {
     const db = new FakeD1(null);
     const env = {
@@ -32,7 +32,9 @@ describe("GameRoom moves", () => {
     expect(body.error?.code).toBe("validation_error");
     expect(response.headers.get("set-cookie")).toBeNull();
   });
+});
 
+describe("GameRoom moves", () => {
   it("creates, joins, moves, and reads events through the public friend game API", async () => {
     const db = new FakeD1(null);
     const namespace = new FakeGameRoomNamespace(db);

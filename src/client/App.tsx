@@ -72,7 +72,7 @@ const busy = signal(false);
 const connection = signal<"idle" | "connecting" | "live" | "reconnecting" | "polling">("idle");
 const authMode = signal<"register" | "login">("register");
 const gameMode = signal<GameMode>("cpu");
-const currentPage = signal<"home" | "terms">(window.location.pathname === "/terms" ? "terms" : "home");
+const currentPage = signal<"home" | "terms">(pageForPath(window.location.pathname));
 
 const signedIn = computed(() => user.value !== null && user.value !== undefined);
 
@@ -415,7 +415,8 @@ function AuthScreen() {
                   <div>
                     <a
                       href="/terms"
-                      onClick={(event) => { navigate(event, "/terms"); }}
+                      target="_blank"
+                      rel="noreferrer"
                       style={{ color: t.accent.gold, fontWeight: 700 }}
                     >
                       利用規約を読む
@@ -503,7 +504,7 @@ function TermsPage() {
           ))}
           <div style={{ display: "flex", justifyContent: "flex-start", paddingTop: 8 }}>
             <Btn variant="secondary" size="md" onClick={() => { goHome(); }}>
-              戻る
+              トップへ戻る
             </Btn>
           </div>
         </div>
@@ -1374,7 +1375,7 @@ function goHome(): void {
 }
 
 function pageForPath(pathname: string): "home" | "terms" {
-  return pathname === "/terms" ? "terms" : "home";
+  return pathname.replace(/\/+$/, "") === "/terms" ? "terms" : "home";
 }
 
 // ─── Labels ───────────────────────────────────────────
