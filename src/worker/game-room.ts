@@ -150,9 +150,6 @@ export class GameRoom implements DurableObject {
       payload: { whiteUserId: userId },
       clientRequestId: null,
     });
-    if (next.mode === "friend") {
-      await this.deleteFriendRoom(next.id);
-    }
     await this.broadcast(next);
     return this.snapshotResponse(next);
   }
@@ -453,10 +450,6 @@ export class GameRoom implements DurableObject {
       event.clientRequestId,
       game.updatedAt,
     );
-  }
-
-  private async deleteFriendRoom(gameId: string): Promise<void> {
-    await this.env.DB.prepare("DELETE FROM friend_rooms WHERE game_id = ?1").bind(gameId).run();
   }
 }
 
