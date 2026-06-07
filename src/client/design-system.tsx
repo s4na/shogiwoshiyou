@@ -99,8 +99,8 @@ export function ShogiPiece({
       >
         <defs>
           <linearGradient id={id.current} x1="50%" y1="0%" x2="50%" y2="100%">
-            <stop offset="0%" stopColor={promoted ? "#FFF3DC" : "#FBF0DA"} />
-            <stop offset="100%" stopColor={promoted ? "#EBDAB4" : "#E2CDA4"} />
+            <stop offset="0%" style={{ stopColor: promoted ? "#FFF3DC" : "#FBF0DA" }} />
+            <stop offset="100%" style={{ stopColor: promoted ? "#EBDAB4" : "#E2CDA4" }} />
           </linearGradient>
         </defs>
         <path d={KP} fill={`url(#${id.current})`} stroke={t.piece.border} strokeWidth="1" strokeLinejoin="round" />
