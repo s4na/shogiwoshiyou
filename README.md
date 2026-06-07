@@ -38,6 +38,8 @@ Cloudflare Workers 上で動かす将棋対戦アプリ。
 
 盤面の駒は外部画像素材を使わず、文字を CSS で駒風に表示しています。今後、外部の駒画像、フォント、実在商品の意匠に寄せた素材を使う場合は、追加前にライセンスを確認してください。
 
+初期公開時は検索エンジンに載せない前提で、HTML の robots meta と静的アセット/API の `X-Robots-Tag` に `noindex, nofollow` などを付けています。`robots.txt` は `Disallow: /` にせず `Allow: /` にしています。これは crawler がページを取得できないと `noindex` を確認できず、URLだけ検索結果に残る場合があるためです。
+
 ## ローカル開発
 
 ```bash

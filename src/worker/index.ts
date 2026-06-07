@@ -13,6 +13,7 @@ import { apiError, ensureSameOrigin, HttpError } from "./http";
 export { GameRoom };
 
 const app = new Hono<AppEnv>();
+const ROBOTS_HEADER = "noindex, nofollow, noarchive, nosnippet, noimageindex";
 
 const handleSchema = z
   .string()
@@ -53,11 +54,17 @@ const resignSchema = z.object({
 });
 
 app.onError((error, c) => {
+  c.header("X-Robots-Tag", ROBOTS_HEADER);
   if (error instanceof HttpError) {
     return apiError(c, error.status, error.code, error.message);
   }
   console.error(error);
   return apiError(c, 500, "internal_error", "サーバー内でエラーが発生しました。");
+});
+
+app.use("*", async (c, next) => {
+  await next();
+  c.header("X-Robots-Tag", ROBOTS_HEADER);
 });
 
 app.get("/healthz", (c) => c.json({ ok: true }));
