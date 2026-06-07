@@ -237,6 +237,11 @@ export class GameRoom implements DurableObject {
       },
       clientRequestId: requestId,
     });
+    if (isCurrentPlayerCheckmated(next.sfen)) {
+      const ended = await this.endByCheckmate(next, expectedUserForTurn(next));
+      await this.broadcast(ended);
+      return this.snapshotResponse(ended);
+    }
     if (next.mode === "cpu" && expectedUserForTurn(next) === CPU_USER_ID) {
       await this.state.storage.setAlarm(Date.now() + CPU_MOVE_DELAY_MS);
     }

@@ -4,7 +4,64 @@ import { GameRoom } from "../src/worker/game-room";
 import type { Env } from "../src/worker/env";
 import type { StoredGame } from "../src/worker/shogi";
 
-describe("GameRoom CPU turns", () => {
+describe("GameRoom moves", () => {
+  it("ends the game when a player move checkmates the opponent", async () => {
+    const game = storedGame({
+      mode: "friend",
+      whiteUserId: "white-user",
+      sfen: "4k4/3ppp3/9/9/9/9/9/8r/4K4 b RG 1",
+      currentTurn: "black",
+    });
+    const db = new FakeD1(game);
+    const room = createRoom(game, db);
+
+    const response = await room.fetch(
+      new Request("https://game-room/move", {
+        method: "POST",
+        headers: { "x-user-id": "black-user" },
+        body: JSON.stringify({ usi: "R*3a", requestId: "00000000-0000-4000-8000-000000000001" }),
+      }),
+    );
+    const body: { game?: { status?: string; endReason?: string } } = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.game).toEqual(
+      expect.objectContaining({
+        status: "ended",
+        endReason: "checkmate",
+      }),
+    );
+    expect(db.updatedGame).toEqual(
+      expect.objectContaining({
+        status: "ended",
+        winner_user_id: "black-user",
+        end_reason: "checkmate",
+        version: 2,
+        current_turn: "white",
+      }),
+    );
+    expect(db.insertedEvents).toHaveLength(2);
+    expect(db.insertedEvents[0]).toEqual(
+      expect.objectContaining({
+        seq: 2,
+        type: "move.played",
+        actor_user_id: "black-user",
+        client_request_id: "00000000-0000-4000-8000-000000000001",
+      }),
+    );
+    expect(db.insertedEvents[1]).toEqual(
+      expect.objectContaining({
+        seq: 3,
+        type: "game.checkmated",
+        actor_user_id: "white-user",
+        payload_json: JSON.stringify({
+          loserUserId: "white-user",
+          winnerUserId: "black-user",
+        }),
+      }),
+    );
+  });
+
   it("ends the game when the CPU move checkmates the player", async () => {
     const game = storedGame({
       sfen: "4k4/8R/9/9/9/9/9/3PPP3/4K4 w rg 1",
@@ -121,8 +178,11 @@ function storedGame(overrides: Partial<StoredGame> = {}): StoredGame {
 class FakeD1 {
   updatedGame: Record<string, unknown> | null = null;
   insertedEvents: Record<string, unknown>[] = [];
+  private currentGame: StoredGame;
 
-  constructor(private readonly game: StoredGame) {}
+  constructor(game: StoredGame) {
+    this.currentGame = game;
+  }
 
   prepare(sql: string): FakeStatement {
     return new FakeStatement(sql, this);
@@ -138,20 +198,36 @@ class FakeD1 {
 
   rowForGame(): Record<string, unknown> {
     return {
-      id: this.game.id,
-      mode: this.game.mode,
-      black_user_id: this.game.blackUserId,
-      white_user_id: this.game.whiteUserId,
-      status: this.game.status,
-      sfen: this.game.sfen,
-      moves_json: JSON.stringify(this.game.moves),
-      current_turn: this.game.currentTurn,
-      winner_user_id: this.game.winnerUserId,
-      end_reason: this.game.endReason,
-      version: this.game.version,
-      created_at: this.game.createdAt,
-      updated_at: this.game.updatedAt,
-      last_event_seq: this.game.lastEventSeq,
+      id: this.currentGame.id,
+      mode: this.currentGame.mode,
+      black_user_id: this.currentGame.blackUserId,
+      white_user_id: this.currentGame.whiteUserId,
+      status: this.currentGame.status,
+      sfen: this.currentGame.sfen,
+      moves_json: JSON.stringify(this.currentGame.moves),
+      current_turn: this.currentGame.currentTurn,
+      winner_user_id: this.currentGame.winnerUserId,
+      end_reason: this.currentGame.endReason,
+      version: this.currentGame.version,
+      created_at: this.currentGame.createdAt,
+      updated_at: this.currentGame.updatedAt,
+      last_event_seq: this.currentGame.lastEventSeq,
+    };
+  }
+
+  applyUpdatedGame(row: Record<string, unknown>): void {
+    this.currentGame = {
+      ...this.currentGame,
+      whiteUserId: row.white_user_id as string | null,
+      status: row.status as StoredGame["status"],
+      sfen: String(row.sfen),
+      moves: JSON.parse(String(row.moves_json)) as string[],
+      currentTurn: row.current_turn as StoredGame["currentTurn"],
+      winnerUserId: row.winner_user_id as string | null,
+      endReason: row.end_reason as StoredGame["endReason"],
+      version: Number(row.version),
+      lastEventSeq: Number(row.version) + 1,
+      updatedAt: String(row.updated_at),
     };
   }
 }
@@ -181,6 +257,7 @@ class FakeStatement {
       return Promise.resolve({
         results: [
           { id: "black-user", handle: "sente", display_name: "先手" },
+          { id: "white-user", handle: "gote", display_name: "後手" },
           { id: "cpu-basic", handle: "cpu", display_name: "CPU" },
         ],
       });
@@ -202,6 +279,7 @@ class FakeStatement {
         version: this.values[8],
         updated_at: this.values[9],
       };
+      this.db.applyUpdatedGame(this.db.updatedGame);
     }
     if (this.sql.includes("INSERT INTO game_events")) {
       this.db.insertedEvents.push({
