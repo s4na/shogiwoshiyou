@@ -4,7 +4,7 @@ import tseslint from "typescript-eslint";
 
 export default tseslint.config(
   {
-    ignores: ["dist", ".wrangler", "node_modules", "worker-configuration.d.ts", "eslint.config.mjs", "scripts/*.mjs"],
+    ignores: ["dist", ".vite", ".wrangler", "node_modules", "worker-configuration.d.ts", "eslint.config.mjs", "scripts/*.mjs"],
   },
   js.configs.recommended,
   ...tseslint.configs.strictTypeChecked,

@@ -1,19 +1,16 @@
-name: CI
+name: Deploy to GitHub Pages
 
 on:
-  pull_request:
   push:
     branches:
       - main
-      - codex/shogi-app-design-docs
-      - codex/initial-free-shogi-app
 
 permissions:
   contents: read
 
 jobs:
-  app:
-    name: test lint build
+  build:
+    name: build design demo
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -36,35 +33,28 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Typecheck
-        run: pnpm typecheck
-
-      - name: Lint
-        run: pnpm lint
-
-      - name: Oxlint
-        run: pnpm lint:ox
-
-      - name: Test
-        run: pnpm test
-
-      - name: Build
-        run: pnpm build
-
       - name: Build design demo
         run: pnpm build:design
 
-  zizmor:
-    name: zizmor
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-        with:
-          persist-credentials: false
+      - name: Configure Pages
+        uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b
 
-      - name: Audit workflows
-        uses: zizmorcore/zizmor-action@5f14fd08f7cf1cb1609c1e344975f152c7ee938d
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa
         with:
-          inputs: .github/workflows
-          advanced-security: false
+          path: dist/design
+
+  deploy:
+    name: deploy to github pages
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e
