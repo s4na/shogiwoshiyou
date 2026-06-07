@@ -15,6 +15,7 @@ import {
 type GameEventType = "game.created" | "game.joined" | "move.played" | "game.resigned";
 
 const CPU_USER_ID = "cpu-basic";
+const CPU_MOVE_DELAY_MS = 800;
 
 type MoveRequest = {
   usi: string;
@@ -98,6 +99,20 @@ export class GameRoom implements DurableObject {
       }
     } catch {
       ws.send(JSON.stringify({ type: "error", message: "unknown message" }));
+    }
+  }
+
+  async alarm(): Promise<void> {
+    const game = await this.loadGame();
+    if (game?.mode !== "cpu" || game.status !== "active") {
+      return;
+    }
+    if (expectedUserForTurn(game) !== CPU_USER_ID) {
+      return;
+    }
+    const next = await this.playCpuMove(game);
+    if (next.version !== game.version) {
+      await this.broadcast(next);
     }
   }
 
@@ -196,7 +211,7 @@ export class GameRoom implements DurableObject {
       throw new RoomError(422, "illegal_move", applied.message);
     }
     const now = new Date().toISOString();
-    let next: StoredGame = {
+    const next: StoredGame = {
       ...game,
       sfen: applied.sfen,
       moves: [...game.moves, usi],
@@ -216,7 +231,7 @@ export class GameRoom implements DurableObject {
       clientRequestId: requestId,
     });
     if (next.mode === "cpu" && expectedUserForTurn(next) === CPU_USER_ID) {
-      next = await this.playCpuMove(next);
+      await this.state.storage.setAlarm(Date.now() + CPU_MOVE_DELAY_MS);
     }
     await this.broadcast(next);
     return this.snapshotResponse(next);

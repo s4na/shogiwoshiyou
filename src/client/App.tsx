@@ -710,6 +710,9 @@ function statusLabel(game: GameSnapshot | GameSummary): string {
     return "相手待ち";
   }
   if (game.status === "active") {
+    if (game.mode === "cpu") {
+      return game.currentTurn === "black" ? "あなたの手番" : "CPU思考中";
+    }
     return game.currentTurn === "black" ? "先手番" : "後手番";
   }
   if (game.winner) {
