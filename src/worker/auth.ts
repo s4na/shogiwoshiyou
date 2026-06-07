@@ -1,6 +1,7 @@
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import type { Context, MiddlewareHandler } from "hono";
 
+import { currentTermsHash } from "../shared/terms";
 import type { SessionPayload, UserSummary } from "../shared/types";
 import { constantTimeEqual, hashPassword, PASSWORD_ITERATIONS, randomToken, sha256Base64Url } from "./crypto";
 import type { AppEnv, Env } from "./env";
@@ -13,6 +14,13 @@ const RESERVED_HANDLES = new Set(["cpu"]);
 export type RegisterInput = {
   handle: string;
   password: string;
+  termsAccepted: true;
+  termsHash: string;
+};
+
+export type TermsAgreementInput = {
+  termsAccepted: true;
+  termsHash: string;
 };
 
 export type LoginInput = {
@@ -41,11 +49,19 @@ export function sessionCookieName(env: Env): string {
   return env.SESSION_COOKIE_NAME ?? COOKIE_DEFAULT;
 }
 
-export function authMiddleware(): MiddlewareHandler<AppEnv> {
+export function authMiddleware(options: { requireCurrentTerms?: boolean } = {}): MiddlewareHandler<AppEnv> {
+  const requireCurrentTerms = options.requireCurrentTerms ?? true;
   return async (c, next) => {
     const user = await currentUser(c);
     if (!user) {
       throw new HttpError(401, "unauthorized", "ログインが必要です。");
+    }
+    if (requireCurrentTerms) {
+      const termsHash = await currentTermsHash();
+      const accepted = await hasAcceptedTerms(c.env.DB, user.id, termsHash);
+      if (!accepted) {
+        throw new HttpError(403, "terms_agreement_required", "最新の利用規約への同意が必要です。");
+      }
     }
     c.set("user", user);
     await next();
@@ -53,7 +69,7 @@ export function authMiddleware(): MiddlewareHandler<AppEnv> {
 }
 
 export async function currentSession(c: Context<AppEnv>): Promise<SessionPayload> {
-  return { user: await currentUser(c) };
+  return sessionPayload(c, await currentUser(c));
 }
 
 export async function currentUser(c: Context<AppEnv>): Promise<UserSummary | null> {
@@ -87,10 +103,15 @@ export async function register(c: Context<AppEnv>, input: RegisterInput): Promis
   if (RESERVED_HANDLES.has(normalizedHandle)) {
     throw new HttpError(409, "handle_reserved", "そのハンドルは予約されています。");
   }
+  const expectedTermsHash = await currentTermsHash();
+  if (input.termsHash !== expectedTermsHash) {
+    throw new HttpError(400, "terms_hash_mismatch", "利用規約を再読み込みしてください。");
+  }
   const now = new Date().toISOString();
   const userId = crypto.randomUUID();
   const salt = randomToken(18);
   const passwordHash = await hashPassword(input.password, salt);
+  const termsAgreementId = crypto.randomUUID();
 
   try {
     await c.env.DB.batch([
@@ -103,6 +124,10 @@ export async function register(c: Context<AppEnv>, input: RegisterInput): Promis
          (user_id, password_salt, password_hash, password_iterations, created_at, updated_at)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6)`,
       ).bind(userId, salt, passwordHash, PASSWORD_ITERATIONS, now, now),
+      c.env.DB.prepare(
+        `INSERT INTO user_terms_agreements (id, user_id, terms_hash, agreed_at)
+         VALUES (?1, ?2, ?3, ?4)`,
+      ).bind(termsAgreementId, userId, input.termsHash, now),
     ]);
   } catch (error) {
     if (String(error).includes("UNIQUE")) {
@@ -114,6 +139,19 @@ export async function register(c: Context<AppEnv>, input: RegisterInput): Promis
   const user = { id: userId, handle: normalizedHandle, displayName: normalizedHandle };
   await createSession(c, user.id);
   return user;
+}
+
+export async function acceptCurrentTerms(
+  c: Context<AppEnv>,
+  user: UserSummary,
+  input: TermsAgreementInput,
+): Promise<SessionPayload> {
+  const expectedTermsHash = await currentTermsHash();
+  if (input.termsHash !== expectedTermsHash) {
+    throw new HttpError(400, "terms_hash_mismatch", "利用規約を再読み込みしてください。");
+  }
+  await recordTermsAgreement(c.env.DB, user.id, input.termsHash, new Date().toISOString());
+  return sessionPayload(c, user);
 }
 
 export async function login(c: Context<AppEnv>, input: LoginInput): Promise<UserSummary> {
@@ -192,6 +230,39 @@ async function createSession(c: Context<AppEnv>, userId: string): Promise<void> 
     secure: new URL(c.req.url).protocol === "https:",
     expires,
   });
+}
+
+export async function sessionPayload(c: Context<AppEnv>, user: UserSummary | null): Promise<SessionPayload> {
+  const termsHash = await currentTermsHash();
+  const termsAgreementRequired = user ? !(await hasAcceptedTerms(c.env.DB, user.id, termsHash)) : false;
+  return { user, termsAgreementRequired, termsHash };
+}
+
+async function hasAcceptedTerms(db: D1Database, userId: string, termsHash: string): Promise<boolean> {
+  const row = await db.prepare(
+    `SELECT 1 AS accepted
+     FROM user_terms_agreements
+     WHERE user_id = ?1
+       AND terms_hash = ?2
+     LIMIT 1`,
+  )
+    .bind(userId, termsHash)
+    .first<{ accepted: number }>();
+  return Boolean(row);
+}
+
+async function recordTermsAgreement(
+  db: D1Database,
+  userId: string,
+  termsHash: string,
+  agreedAt: string,
+): Promise<void> {
+  await db.prepare(
+    `INSERT INTO user_terms_agreements (id, user_id, terms_hash, agreed_at)
+     VALUES (?1, ?2, ?3, ?4)`,
+  )
+    .bind(crypto.randomUUID(), userId, termsHash, agreedAt)
+    .run();
 }
 
 function toUserSummary(row: UserRow): UserSummary {

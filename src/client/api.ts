@@ -48,6 +48,13 @@ export async function logoutAccount(): Promise<SessionPayload> {
   return api<SessionPayload>("/api/auth/logout", { method: "POST" });
 }
 
+export async function acceptTermsAgreement(input: JsonBody): Promise<SessionPayload> {
+  return api<SessionPayload>("/api/terms/agreements", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
 export async function updateProfile(input: JsonBody): Promise<SessionPayload> {
   return api<SessionPayload>("/api/profile", {
     method: "PATCH",

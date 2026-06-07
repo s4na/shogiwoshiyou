@@ -4,7 +4,16 @@ import type { Context, Env as HonoEnv } from "hono";
 import { z } from "zod";
 
 import type { GamesResponse, SessionPayload } from "../shared/types";
-import { authMiddleware, currentSession, login, logout, register, updateProfile } from "./auth";
+import {
+  acceptCurrentTerms,
+  authMiddleware,
+  currentSession,
+  login,
+  logout,
+  register,
+  sessionPayload,
+  updateProfile,
+} from "./auth";
 import { sha256Hex } from "./crypto";
 import type { AppEnv, Env } from "./env";
 import { GameRoom } from "./game-room";
@@ -29,6 +38,13 @@ const passwordSchema = z.string().min(8).max(128);
 const registerSchema = z.object({
   handle: handleSchema,
   password: passwordSchema,
+  termsAccepted: z.literal(true),
+  termsHash: z.string().regex(/^[a-f0-9]{64}$/),
+});
+
+const termsAgreementSchema = z.object({
+  termsAccepted: z.literal(true),
+  termsHash: z.string().regex(/^[a-f0-9]{64}$/),
 });
 
 const loginSchema = z.object({
@@ -77,27 +93,37 @@ app.get("/api/session", async (c) => {
 app.post("/api/auth/register", zValidator("json", registerSchema, validationHook), async (c) => {
   ensureSameOrigin(c);
   const user = await register(c, c.req.valid("json"));
-  return c.json<SessionPayload>({ user }, 201);
+  return c.json<SessionPayload>(await sessionPayload(c, user), 201);
 });
 
 app.post("/api/auth/login", zValidator("json", loginSchema, validationHook), async (c) => {
   ensureSameOrigin(c);
   const user = await login(c, c.req.valid("json"));
-  return c.json<SessionPayload>({ user });
+  return c.json<SessionPayload>(await sessionPayload(c, user));
 });
 
 app.post("/api/auth/logout", async (c) => {
   ensureSameOrigin(c);
   await logout(c);
-  return c.json<SessionPayload>({ user: null });
+  return c.json<SessionPayload>(await sessionPayload(c, null));
 });
+
+app.post(
+  "/api/terms/agreements",
+  authMiddleware({ requireCurrentTerms: false }),
+  zValidator("json", termsAgreementSchema, validationHook),
+  async (c) => {
+    ensureSameOrigin(c);
+    return c.json<SessionPayload>(await acceptCurrentTerms(c, c.get("user"), c.req.valid("json")));
+  },
+);
 
 app.use("/api/profile", authMiddleware());
 
 app.patch("/api/profile", zValidator("json", profileSchema, validationHook), async (c) => {
   ensureSameOrigin(c);
   const user = await updateProfile(c, c.get("user"), c.req.valid("json"));
-  return c.json<SessionPayload>({ user });
+  return c.json<SessionPayload>(await sessionPayload(c, user));
 });
 
 app.use("/api/games", authMiddleware());

@@ -3,6 +3,7 @@ import { useEffect, useState, useRef } from "preact/hooks";
 
 import {
   ApiClientError,
+  acceptTermsAgreement,
   createGame,
   getGame,
   getGameEvents,
@@ -56,11 +57,15 @@ import type {
   HandPieceType,
   PlayerColor,
   PieceType,
+  SessionPayload,
   UserSummary,
 } from "../shared/types";
+import { currentTermsHash, TERMS_TEXT } from "../shared/terms";
 
 // ─── Global state ─────────────────────────────────────
 const user = signal<UserSummary | null | undefined>(undefined);
+const termsAgreementRequired = signal(false);
+const sessionTermsHash = signal("");
 const games = signal<GameSummary[]>([]);
 const activeGame = signal<GameSnapshot | null>(null);
 const events = signal<GameEvent[]>([]);
@@ -72,6 +77,7 @@ const busy = signal(false);
 const connection = signal<"idle" | "connecting" | "live" | "reconnecting" | "polling">("idle");
 const authMode = signal<"register" | "login">("register");
 const gameMode = signal<GameMode>("cpu");
+const currentPage = signal<"home" | "terms">(pageForPath(window.location.pathname));
 
 const signedIn = computed(() => user.value !== null && user.value !== undefined);
 
@@ -92,11 +98,30 @@ function isPromoted(type: PieceType): boolean {
 export function App() {
   const [darkMode, setDarkMode] = useState(false);
   const theme = darkMode ? DARK : LIGHT;
+  const showingTerms = currentPage.value === "terms";
 
   useEffect(() => {
     void bootstrap();
-    return () => { closeRealtime(); };
+    const onPopState = () => {
+      currentPage.value = pageForPath(window.location.pathname);
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => {
+      window.removeEventListener("popstate", onPopState);
+      closeRealtime();
+    };
   }, []);
+
+  useEffect(() => {
+    document.title = showingTerms ? "利用規約 | 将棋をしよう" : "将棋をしよう";
+    if (!showingTerms) return;
+    const frame = window.requestAnimationFrame(() => {
+      document.querySelector<HTMLElement>('main[data-page="terms"]')?.focus();
+    });
+    return () => {
+      window.cancelAnimationFrame(frame);
+    };
+  }, [showingTerms]);
 
   return (
     <ThemeCtx.Provider value={theme}>
@@ -129,7 +154,7 @@ export function App() {
           transition: `background-color ${MOTION.slow}`,
         }}
       >
-        {user.value === undefined ? (
+        {!showingTerms && user.value === undefined ? (
           <div
             style={{
               minHeight: "100svh",
@@ -145,12 +170,76 @@ export function App() {
         ) : (
           <>
             <Header darkMode={darkMode} onToggleDark={() => { setDarkMode((d) => !d); }} />
-            {!signedIn.value ? <AuthScreen /> : <PlayScreen />}
+            {showingTerms ? (
+              <TermsPage />
+            ) : !signedIn.value ? (
+              <AuthScreen />
+            ) : termsAgreementRequired.value ? (
+              <TermsAgreementScreen />
+            ) : (
+              <PlayScreen />
+            )}
           </>
         )}
         {notice.value ? <Toast message={notice.value} type="error" /> : null}
       </div>
     </ThemeCtx.Provider>
+  );
+}
+
+function TermsAgreementScreen() {
+  const t = useTheme();
+  return (
+    <main style={{ minHeight: "calc(100svh - 72px)", display: "grid", placeItems: "center", padding: 24 }}>
+      <section
+        style={{
+          width: "min(520px, 100%)",
+          backgroundColor: t.bg.elevated,
+          border: `1px solid ${t.border.default}`,
+          borderRadius: R.lg,
+          boxShadow: t.shadow.md,
+          padding: 28,
+        }}
+      >
+        <h2 style={{ color: t.text.primary, fontFamily: fS, fontSize: 24, fontWeight: 800, marginBottom: 12 }}>
+          利用規約が更新されました
+        </h2>
+        <p style={{ color: t.text.secondary, fontFamily: fG, fontSize: 14, lineHeight: 1.8, marginBottom: 18 }}>
+          続けて利用するには、最新の利用規約を確認して同意してください。
+        </p>
+        <form onSubmit={(event) => void submitTermsAgreement(event)} style={{ display: "grid", gap: 14 }}>
+          <input type="hidden" name="termsHash" value={sessionTermsHash.value} />
+          <div style={{ color: t.text.secondary, display: "flex", gap: 10, fontFamily: fG, fontSize: 14, lineHeight: 1.7 }}>
+            <input
+              id="refresh-terms"
+              name="termsAccepted"
+              type="checkbox"
+              required
+              style={{ width: 18, height: 18, marginTop: 4, accentColor: t.accent.gold, flexShrink: 0 }}
+            />
+            <div>
+              <label for="refresh-terms">最新の利用規約に同意します。</label>
+              <div>
+                <a
+                  href="/terms"
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ color: t.accent.gold, fontWeight: 700 }}
+                >
+                  利用規約を読む
+                </a>
+              </div>
+            </div>
+          </div>
+          <p style={{ color: t.text.tertiary, fontFamily: fG, fontSize: 12, lineHeight: 1.7 }}>
+            同意日時と、表示中の利用規約全文のhashを保存します。
+          </p>
+          <Btn variant="primary" size="lg" full type="submit" disabled={busy.value || !sessionTermsHash.value}>
+            同意して続ける
+          </Btn>
+        </form>
+      </section>
+    </main>
   );
 }
 
@@ -195,6 +284,20 @@ function Header({ darkMode, onToggleDark }: { darkMode: boolean; onToggleDark: (
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+        <a
+          href="/terms"
+          onClick={(event) => { navigate(event, "/terms"); }}
+          style={{
+            color: t.text.secondary,
+            fontFamily: fG,
+            fontSize: 13,
+            fontWeight: 600,
+            textDecoration: "none",
+            padding: "8px 4px",
+          }}
+        >
+          利用規約
+        </a>
         <SessionArea />
         <button
           type="button"
@@ -283,6 +386,22 @@ function SessionArea() {
 // ─── Auth ─────────────────────────────────────────────
 function AuthScreen() {
   const t = useTheme();
+  const [termsHash, setTermsHash] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    if (authMode.value !== "register") {
+      setTermsHash("");
+      return () => { active = false; };
+    }
+    void currentTermsHash().then((hash) => {
+      if (active) {
+        setTermsHash(hash);
+      }
+    });
+    return () => { active = false; };
+  }, [authMode.value]);
+
   return (
     <div
       style={{
@@ -357,13 +476,218 @@ function AuthScreen() {
             />
           </FieldGroup>
 
-          <Btn variant="primary" size="lg" full type="submit" disabled={busy.value}>
+          {authMode.value === "register" && (
+            <div style={{ display: "grid", gap: 8 }}>
+              <input type="hidden" name="termsHash" value={termsHash} />
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 10, minHeight: 48, paddingTop: 6 }}>
+                <input
+                  id="auth-terms"
+                  name="termsAccepted"
+                  type="checkbox"
+                  required
+                  style={{
+                    width: 18,
+                    height: 18,
+                    marginTop: 7,
+                    accentColor: t.accent.gold,
+                    flexShrink: 0,
+                  }}
+                />
+                <div
+                  style={{
+                    color: t.text.secondary,
+                    fontFamily: fG,
+                    fontSize: 13,
+                    lineHeight: 1.6,
+                    padding: "4px 0 10px",
+                  }}
+                >
+                  <label for="auth-terms">利用規約に同意します。</label>
+                  <div>
+                    <a
+                      href="/terms"
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{ color: t.accent.gold, fontWeight: 700 }}
+                    >
+                      利用規約を読む
+                    </a>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <Btn variant="primary" size="lg" full type="submit" disabled={busy.value || (authMode.value === "register" && !termsHash)}>
             {authMode.value === "register" ? "登録して始める" : "ログイン"}
           </Btn>
         </form>
       </div>
     </div>
   );
+}
+
+function TermsPage() {
+  const t = useTheme();
+  const lines = TERMS_TEXT.split("\n");
+  return (
+    <main
+      data-page="terms"
+      tabIndex={-1}
+      style={{ maxWidth: 860, margin: "0 auto", padding: "28px 24px 64px" }}
+    >
+      <article
+        style={{
+          backgroundColor: t.bg.elevated,
+          border: `1px solid ${t.border.default}`,
+          borderRadius: R.lg,
+          boxShadow: t.shadow.md,
+          overflow: "hidden",
+        }}
+      >
+        <div style={{ padding: "28px 28px 16px", borderBottom: `1px solid ${t.border.subtle}` }}>
+          <h2 style={{ color: t.text.primary, fontFamily: fS, fontSize: 28, fontWeight: 800 }}>
+            利用規約
+          </h2>
+        </div>
+        <div style={{ display: "grid", gap: 10, padding: 28 }}>
+          {renderTermsBlocks(lines, t)}
+          <div style={{ display: "flex", justifyContent: "flex-start", paddingTop: 8 }}>
+            <Btn variant="secondary" size="md" onClick={() => { goHome(); }}>
+              トップへ戻る
+            </Btn>
+          </div>
+        </div>
+      </article>
+    </main>
+  );
+}
+
+function renderTermsBlocks(lines: string[], t: Theme) {
+  const blocks = [];
+  const listItemPattern = /^(\s*)(\d+)\.\s(.+)$/;
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index] ?? "";
+    const key = `${String(index)}-${line}`;
+    if (line === "" || line === "---" || line === "# 利用規約") {
+      blocks.push(<div key={key} style={{ height: line === "" ? 6 : 1 }} />);
+      continue;
+    }
+    if (line.startsWith("## ")) {
+      blocks.push(
+        <h3
+          key={key}
+          style={{
+            color: t.text.primary,
+            fontFamily: fS,
+            fontSize: 17,
+            fontWeight: 700,
+            lineHeight: 1.6,
+            marginTop: index === 0 ? 0 : 10,
+          }}
+        >
+          {line.slice(3)}
+        </h3>,
+      );
+      continue;
+    }
+
+    const listMatch = listItemPattern.exec(line);
+    if (listMatch) {
+      const [, indentText = ""] = listMatch;
+      const result = renderTermsList(lines, index, indentText.length, t);
+      blocks.push(result.element);
+      index = result.nextIndex - 1;
+      continue;
+    }
+
+    const trimmed = line.trimStart();
+    const indent = line.length - trimmed.length;
+    blocks.push(
+      <p
+        key={key}
+        style={{
+          color: t.text.secondary,
+          fontFamily: fG,
+          fontSize: 14,
+          lineHeight: 1.8,
+          marginLeft: indent > 0 ? 18 : 0,
+          whiteSpace: "pre-wrap",
+        }}
+      >
+        {trimmed}
+      </p>,
+    );
+  }
+  return blocks;
+}
+
+function renderTermsList(lines: string[], startIndex: number, indent: number, t: Theme) {
+  const listItemPattern = /^(\s*)(\d+)\.\s(.+)$/;
+  const firstMatch = listItemPattern.exec(lines[startIndex] ?? "");
+  const start = Number(firstMatch?.[2] ?? "1");
+  const items = [];
+  let index = startIndex;
+
+  while (index < lines.length) {
+    const itemMatch = listItemPattern.exec(lines[index] ?? "");
+    if (!itemMatch) break;
+    const [, itemIndent = "", itemNumber = "1", itemText = ""] = itemMatch;
+    if (itemIndent.length !== indent) break;
+
+    const itemIndex = index;
+    index += 1;
+    while (lines[index] === "") {
+      index += 1;
+    }
+
+    const children = [];
+    const nestedMatch = listItemPattern.exec(lines[index] ?? "");
+    const nestedIndent = nestedMatch?.[1]?.length ?? -1;
+    if (nestedIndent > indent) {
+      const nested = renderTermsList(lines, index, nestedIndent, t);
+      children.push(nested.element);
+      index = nested.nextIndex;
+      while (lines[index] === "") {
+        index += 1;
+      }
+    }
+
+    const nextMatch = listItemPattern.exec(lines[index] ?? "");
+    const nextIndent = nextMatch?.[1]?.length ?? -1;
+    items.push({ children, index: itemIndex, number: Number(itemNumber), text: itemText });
+    if (!nextMatch || nextIndent < indent) break;
+    if (nextIndent > indent) break;
+  }
+
+  return {
+    element: (
+      <ol
+        key={`${String(startIndex)}-list`}
+        start={start}
+        style={{
+          color: t.text.secondary,
+          fontFamily: fG,
+          fontSize: 14,
+          lineHeight: 1.8,
+          margin: 0,
+          paddingLeft: 22,
+        }}
+      >
+        {items.map((item) => (
+          <li key={`${String(item.index)}-${String(item.number)}-${item.text}`} style={{ paddingLeft: 4 }}>
+            {item.text}
+            {item.children.length > 0 ? (
+              <div style={{ marginTop: 6 }}>
+                {item.children}
+              </div>
+            ) : null}
+          </li>
+        ))}
+      </ol>
+    ),
+    nextIndex: index,
+  };
 }
 
 // ─── Play layout ──────────────────────────────────────
@@ -968,24 +1292,46 @@ function connectionColor(conn: "idle" | "connecting" | "live" | "reconnecting" |
 async function bootstrap(): Promise<void> {
   try {
     const session = await getSession();
-    user.value = session.user;
-    if (session.user) { await refreshGames(); }
+    applySession(session);
+    if (session.user && !session.termsAgreementRequired) { await refreshGames(); }
   } catch (error) {
     showError(error);
     user.value = null;
+    termsAgreementRequired.value = false;
+    sessionTermsHash.value = "";
   }
 }
 
 async function submitAuth(event: SubmitEvent): Promise<void> {
   event.preventDefault();
   const form = new FormData(event.currentTarget as HTMLFormElement);
-  const input = Object.fromEntries(form.entries());
+  const input =
+    authMode.value === "register"
+      ? { ...Object.fromEntries(form.entries()), termsAccepted: form.get("termsAccepted") === "on" }
+      : Object.fromEntries(form.entries());
   await withBusy(async () => {
     const session =
       authMode.value === "register"
         ? await registerAccount(input)
         : await loginAccount(input);
-    user.value = session.user;
+    applySession(session);
+    if (!session.termsAgreementRequired) {
+      await refreshGames();
+    }
+  });
+}
+
+async function submitTermsAgreement(event: SubmitEvent): Promise<void> {
+  event.preventDefault();
+  const form = new FormData(event.currentTarget as HTMLFormElement);
+  const termsHashEntry = form.get("termsHash");
+  const input = {
+    termsAccepted: form.get("termsAccepted") === "on",
+    termsHash: typeof termsHashEntry === "string" ? termsHashEntry : "",
+  };
+  await withBusy(async () => {
+    const session = await acceptTermsAgreement(input);
+    applySession(session);
     await refreshGames();
   });
 }
@@ -997,7 +1343,7 @@ async function submitProfile(event: SubmitEvent): Promise<boolean> {
   let ok = false;
   await withBusy(async () => {
     const session = await updateProfile(input);
-    user.value = session.user;
+    applySession(session);
     await refreshGames();
     if (activeGame.value) {
       const response = await getGame(activeGame.value.id);
@@ -1010,13 +1356,19 @@ async function submitProfile(event: SubmitEvent): Promise<boolean> {
 
 async function handleLogout(): Promise<void> {
   await withBusy(async () => {
-    await logoutAccount();
-    user.value = null;
+    const session = await logoutAccount();
+    applySession(session);
     games.value = [];
     activeGame.value = null;
     events.value = [];
     closeRealtime();
   });
+}
+
+function applySession(session: SessionPayload): void {
+  user.value = session.user;
+  termsAgreementRequired.value = session.termsAgreementRequired;
+  sessionTermsHash.value = session.termsHash;
 }
 
 async function refreshGames(): Promise<void> {
@@ -1204,9 +1556,37 @@ async function withBusy(action: () => Promise<void>): Promise<void> {
 }
 
 function showError(error: unknown): void {
-  if (error instanceof ApiClientError) { notice.value = error.message; return; }
+  if (error instanceof ApiClientError) {
+    if (error.code === "terms_agreement_required") {
+      termsAgreementRequired.value = true;
+    }
+    notice.value = error.message;
+    return;
+  }
   if (error instanceof Error) { notice.value = error.message; return; }
   notice.value = "処理に失敗しました。";
+}
+
+function navigate(event: MouseEvent, path: string): void {
+  if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+    return;
+  }
+  event.preventDefault();
+  if (window.location.pathname !== path) {
+    window.history.pushState(null, "", path);
+  }
+  currentPage.value = pageForPath(path);
+}
+
+function goHome(): void {
+  if (window.location.pathname !== "/") {
+    window.history.pushState(null, "", "/");
+  }
+  currentPage.value = "home";
+}
+
+function pageForPath(pathname: string): "home" | "terms" {
+  return pathname.replace(/\/+$/, "") === "/terms" ? "terms" : "home";
 }
 
 // ─── Labels ───────────────────────────────────────────

@@ -33,6 +33,8 @@ export type UserSummary = {
 
 export type SessionPayload = {
   user: UserSummary | null;
+  termsAgreementRequired: boolean;
+  termsHash: string;
 };
 
 export type BoardPiece = {
