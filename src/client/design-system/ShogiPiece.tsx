@@ -3,10 +3,10 @@ import { useRef } from "preact/hooks";
 import { MOTION, fS } from "./tokens";
 import { useTheme } from "./theme";
 
-const KP = "M50 5 L84 32 L86 112 L14 112 L16 32 Z";
-const KI = "M50 10 L81 34 L83 109 L17 109 L19 34 Z";
-const KVB = "0 0 100 116";
-const KR = 1.12;
+const KP = "M50 2 L87 30 L93 103 L7 103 L13 30 Z";
+const KI = "M50 8 L83.5 32.5 L89.5 100 L10.5 100 L16.5 32.5 Z";
+const KVB = "0 0 100 105";
+const KR = 1.05;
 const CO = 0.05;
 
 // SVG linearGradient id はドキュメント内でユニークである必要があるためカウンターで生成
@@ -64,17 +64,18 @@ export function ShogiPiece({
       >
         <defs>
           <linearGradient id={id.current} x1="50%" y1="0%" x2="50%" y2="100%">
-            <stop offset="0%" style={{ stopColor: promoted ? "#FFF3DC" : "#FBF0DA" }} />
-            <stop offset="100%" style={{ stopColor: promoted ? "#EBDAB4" : "#E2CDA4" }} />
+            <stop offset="0%" style={{ stopColor: promoted ? "#f2d08a" : "#ecc77f" }} />
+            <stop offset="100%" style={{ stopColor: promoted ? "#d4a45c" : "#cf9c52" }} />
           </linearGradient>
         </defs>
-        <path d={KP} fill={`url(#${id.current})`} stroke={t.piece.border} strokeWidth="1" strokeLinejoin="round" />
+        <path d={KP} fill={`url(#${id.current})`} stroke={t.piece.border} strokeWidth="2" strokeLinejoin="round" />
         <path
           d={KI}
           fill="none"
-          stroke={promoted ? "rgba(184,22,46,0.12)" : "rgba(140,110,60,0.08)"}
-          strokeWidth="0.5"
+          stroke={t.piece.border}
+          strokeWidth="1"
           strokeLinejoin="round"
+          opacity={0.55}
         />
       </svg>
       <span
