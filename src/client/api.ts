@@ -1,6 +1,7 @@
 import type {
   ApiError,
   CreateGameResponse,
+  GameMode,
   GameEventsResponse,
   GameResponse,
   GamesResponse,
@@ -9,6 +10,11 @@ import type {
 } from "../shared/types";
 
 type JsonBody = Record<string, unknown>;
+
+export type CreateGameInput = {
+  mode: GameMode;
+  passcode?: string;
+};
 
 export class ApiClientError extends Error {
   constructor(
@@ -42,12 +48,22 @@ export async function logoutAccount(): Promise<SessionPayload> {
   return api<SessionPayload>("/api/auth/logout", { method: "POST" });
 }
 
+export async function updateProfile(input: JsonBody): Promise<SessionPayload> {
+  return api<SessionPayload>("/api/profile", {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  });
+}
+
 export async function listGames(): Promise<GamesResponse> {
   return api<GamesResponse>("/api/games");
 }
 
-export async function createGame(): Promise<CreateGameResponse> {
-  return api<CreateGameResponse>("/api/games", { method: "POST" });
+export async function createGame(input: CreateGameInput): Promise<CreateGameResponse> {
+  return api<CreateGameResponse>("/api/games", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
 }
 
 export async function getGame(gameId: string): Promise<GameResponse> {

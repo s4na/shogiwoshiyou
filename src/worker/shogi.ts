@@ -7,9 +7,11 @@ import {
   Square,
   standardPieceName,
 } from "tsshogi";
+import type { Move } from "tsshogi";
 
 import type {
   BoardSquare,
+  GameMode,
   GameMove,
   GamePlayer,
   GameSnapshot,
@@ -24,6 +26,7 @@ import type {
 
 export type StoredGame = {
   id: string;
+  mode: GameMode;
   status: GameStatus;
   blackUserId: string;
   whiteUserId: string | null;
@@ -51,12 +54,19 @@ export type MoveApplication =
 
 const USI_MOVE_PATTERN = /^(?:[1-9][a-i][1-9][a-i]\+?|[PLNSGBR]\*[1-9][a-i])$/;
 
-export function createInitialGame(id: string, blackUserId: string, now: string): StoredGame {
+export function createInitialGame(
+  id: string,
+  blackUserId: string,
+  now: string,
+  mode: GameMode = "public",
+  whiteUserId: string | null = null,
+): StoredGame {
   return {
     id,
-    status: "waiting",
+    mode,
+    status: whiteUserId ? "active" : "waiting",
     blackUserId,
-    whiteUserId: null,
+    whiteUserId,
     sfen: InitialPositionSFEN.STANDARD,
     moves: [],
     currentTurn: "black",
@@ -67,6 +77,16 @@ export function createInitialGame(id: string, blackUserId: string, now: string):
     createdAt: now,
     updatedAt: now,
   };
+}
+
+export function chooseCpuMove(sfen: string): string | null {
+  const position = Position.newBySFEN(sfen);
+  if (!position) {
+    return null;
+  }
+  const moves = listLegalMoves(position);
+  moves.sort((a, b) => a.usi.localeCompare(b.usi));
+  return moves[0]?.usi ?? null;
 }
 
 export function applyUsiMove(sfen: string, usi: string): MoveApplication {
@@ -107,6 +127,7 @@ export function snapshotFromStoredGame(
   }
   return {
     id: game.id,
+    mode: game.mode,
     status: game.status,
     sfen: game.sfen,
     currentTurn: game.currentTurn,
@@ -132,6 +153,7 @@ export function snapshotFromStoredGame(
 export function summaryFromSnapshot(snapshot: GameSnapshot): GameSummary {
   return {
     id: snapshot.id,
+    mode: snapshot.mode,
     status: snapshot.status,
     currentTurn: snapshot.currentTurn,
     version: snapshot.version,
@@ -219,4 +241,39 @@ export function isHandPieceType(type: TsshogiPieceType): type is TsshogiPieceTyp
 
 export function colorToTsshogi(color: PlayerColor): TsshogiColor {
   return toTsshogiColor(color);
+}
+
+function listLegalMoves(position: Position): Move[] {
+  const moves: Move[] = [];
+  for (const from of Square.all) {
+    const piece = position.board.at(from);
+    if (piece?.color !== position.color) {
+      continue;
+    }
+    for (const to of Square.all) {
+      addLegalMove(position, moves, position.createMove(from, to));
+    }
+  }
+  for (const type of handPieceTypes) {
+    if (position.hand(position.color).count(type) === 0) {
+      continue;
+    }
+    for (const to of Square.all) {
+      addLegalMove(position, moves, position.createMove(type, to));
+    }
+  }
+  return moves;
+}
+
+function addLegalMove(position: Position, moves: Move[], move: Move | null): void {
+  if (!move) {
+    return;
+  }
+  if (position.isValidMove(move)) {
+    moves.push(move);
+  }
+  const promoted = move.withPromote();
+  if (!promoted.equals(move) && position.isValidMove(promoted)) {
+    moves.push(promoted);
+  }
 }

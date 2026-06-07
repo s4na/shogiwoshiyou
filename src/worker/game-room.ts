@@ -3,6 +3,7 @@ import type { Env } from "./env";
 import { loadUsers, toStoredGame, type GameRow } from "./game-store";
 import {
   applyUsiMove,
+  chooseCpuMove,
   createInitialGame,
   expectedUserForTurn,
   opponentUserId,
@@ -12,6 +13,8 @@ import {
 } from "./shogi";
 
 type GameEventType = "game.created" | "game.joined" | "move.played" | "game.resigned";
+
+const CPU_USER_ID = "cpu-basic";
 
 type MoveRequest = {
   usi: string;
@@ -37,7 +40,7 @@ export class GameRoom implements DurableObject {
       }
 
       if (url.pathname === "/create" && request.method === "POST") {
-        return await this.createGame(userId);
+        return await this.createGame(userId, request.headers.get("x-game-mode"));
       }
       if (url.pathname === "/join" && request.method === "POST") {
         return await this.joinGame(userId);
@@ -92,18 +95,22 @@ export class GameRoom implements DurableObject {
     }
   }
 
-  private async createGame(userId: string): Promise<Response> {
+  private async createGame(userId: string, rawMode: string | null): Promise<Response> {
     const existing = await this.loadGame();
     if (existing) {
       return this.snapshotResponse(existing);
     }
+    const mode = rawMode === "cpu" || rawMode === "friend" ? rawMode : "public";
     const now = new Date().toISOString();
     const id = this.state.id.name ?? crypto.randomUUID();
-    const game = createInitialGame(id, userId, now);
+    if (mode === "cpu") {
+      await this.ensureCpuUser(now);
+    }
+    const game = createInitialGame(id, userId, now, mode, mode === "cpu" ? CPU_USER_ID : null);
     await this.persistNewGame(game, {
       type: "game.created",
       actorUserId: userId,
-      payload: { blackUserId: userId },
+      payload: { blackUserId: userId, mode },
       clientRequestId: null,
     });
     await this.broadcast(game);
@@ -136,6 +143,9 @@ export class GameRoom implements DurableObject {
       payload: { whiteUserId: userId },
       clientRequestId: null,
     });
+    if (next.mode === "friend") {
+      await this.deleteFriendRoom(next.id);
+    }
     await this.broadcast(next);
     return this.snapshotResponse(next);
   }
@@ -156,7 +166,7 @@ export class GameRoom implements DurableObject {
       throw new RoomError(422, "illegal_move", applied.message);
     }
     const now = new Date().toISOString();
-    const next: StoredGame = {
+    let next: StoredGame = {
       ...game,
       sfen: applied.sfen,
       moves: [...game.moves, usi],
@@ -175,6 +185,9 @@ export class GameRoom implements DurableObject {
       },
       clientRequestId: requestId,
     });
+    if (next.mode === "cpu" && expectedUserForTurn(next) === CPU_USER_ID) {
+      next = await this.playCpuMove(next);
+    }
     await this.broadcast(next);
     return this.snapshotResponse(next);
   }
@@ -270,6 +283,48 @@ export class GameRoom implements DurableObject {
     return { game: snapshotFromStoredGame(game, users) };
   }
 
+  private async playCpuMove(game: StoredGame): Promise<StoredGame> {
+    const usi = chooseCpuMove(game.sfen);
+    if (!usi) {
+      return game;
+    }
+    const applied = applyUsiMove(game.sfen, usi);
+    if (!applied.ok) {
+      return game;
+    }
+    const now = new Date().toISOString();
+    const next: StoredGame = {
+      ...game,
+      sfen: applied.sfen,
+      moves: [...game.moves, usi],
+      currentTurn: applied.currentTurn,
+      version: game.version + 1,
+      lastEventSeq: game.lastEventSeq + 1,
+      updatedAt: now,
+    };
+    await this.persistGame(next, {
+      type: "move.played",
+      actorUserId: CPU_USER_ID,
+      payload: {
+        usi,
+        ply: next.moves.length,
+        color: "white",
+      },
+      clientRequestId: null,
+    });
+    return next;
+  }
+
+  private async ensureCpuUser(now: string): Promise<void> {
+    await this.env.DB.prepare(
+      `INSERT INTO users (id, handle, display_name, created_at)
+       VALUES (?1, ?2, ?3, ?4)
+       ON CONFLICT(id) DO NOTHING`,
+    )
+      .bind(CPU_USER_ID, "cpu", "CPU", now)
+      .run();
+  }
+
   private async connectWebSocket(userId: string): Promise<Response> {
     const game = await this.requireGame();
     this.ensureCanViewGame(game, userId);
@@ -314,8 +369,8 @@ export class GameRoom implements DurableObject {
       this.env.DB.prepare(
         `INSERT INTO games
          (id, black_user_id, white_user_id, status, sfen, moves_json, current_turn,
-          winner_user_id, end_reason, version, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)`,
+          winner_user_id, end_reason, version, created_at, updated_at, mode)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)`,
       ).bind(
         game.id,
         game.blackUserId,
@@ -329,6 +384,7 @@ export class GameRoom implements DurableObject {
         game.version,
         game.createdAt,
         game.updatedAt,
+        game.mode,
       ),
       this.insertEventStatement(game, event),
     ]);
@@ -379,6 +435,10 @@ export class GameRoom implements DurableObject {
       event.clientRequestId,
       game.updatedAt,
     );
+  }
+
+  private async deleteFriendRoom(gameId: string): Promise<void> {
+    await this.env.DB.prepare("DELETE FROM friend_rooms WHERE game_id = ?1").bind(gameId).run();
   }
 }
 

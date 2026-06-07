@@ -69,6 +69,13 @@ input {
   padding: 0 12px;
 }
 
+input[type="radio"] {
+  width: auto;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+}
+
 .app-shell {
   min-height: 100svh;
   padding: 20px;
@@ -115,6 +122,7 @@ h2 {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .session-chip,
@@ -163,15 +171,25 @@ h2 {
 
 .auth-form {
   display: grid;
-  gap: 12px;
+  gap: 8px;
 }
 
-.auth-form label {
+.auth-form label,
+.create-game-form label,
+.profile-form label {
   display: grid;
   gap: 6px;
   color: var(--muted);
   font-size: 0.9rem;
   font-weight: 700;
+}
+
+.field-help,
+.profile-form span {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.4;
 }
 
 .auth-form button,
@@ -184,6 +202,17 @@ h2 {
 
 .ghost-button {
   background: transparent;
+}
+
+.profile-form {
+  display: grid;
+  grid-template-columns: auto minmax(150px, 220px) auto;
+  gap: 6px;
+  align-items: center;
+}
+
+.profile-form span {
+  grid-column: 2 / 4;
 }
 
 .play-layout {
@@ -221,7 +250,36 @@ h2 {
 
 .primary-action {
   width: 100%;
+}
+
+.create-game-form {
+  display: grid;
+  gap: 10px;
   margin-bottom: 12px;
+}
+
+.create-game-form fieldset {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.create-game-form legend {
+  color: var(--muted);
+  font-size: 0.88rem;
+  font-weight: 800;
+}
+
+.create-game-form fieldset label {
+  display: flex;
+  grid-template-columns: none;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink);
+  font-weight: 700;
 }
 
 .game-list {
@@ -465,6 +523,15 @@ code {
   .session-area,
   .toolbar-actions {
     justify-content: flex-start;
+  }
+
+  .profile-form {
+    grid-template-columns: 1fr;
+    width: 100%;
+  }
+
+  .profile-form span {
+    grid-column: auto;
   }
 
   .board-panel {

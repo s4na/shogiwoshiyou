@@ -3,6 +3,7 @@ import { type StoredGame, snapshotFromStoredGame, summaryFromSnapshot } from "./
 
 export type GameRow = {
   id: string;
+  mode: StoredGame["mode"];
   black_user_id: string;
   white_user_id: string | null;
   status: StoredGame["status"];
@@ -62,7 +63,8 @@ export async function listGameSummariesForUser(
               COALESCE(MAX(e.seq), 0) AS last_event_seq
        FROM games g
        LEFT JOIN game_events e ON e.game_id = g.id
-       WHERE g.status = 'waiting'
+       WHERE (g.status = 'waiting'
+         AND g.mode = 'public')
           OR g.black_user_id = ?1
           OR g.white_user_id = ?2
        GROUP BY g.id
@@ -132,6 +134,7 @@ export async function loadGameEvents(
 export function toStoredGame(row: GameRow): StoredGame {
   return {
     id: row.id,
+    mode: row.mode,
     status: row.status,
     blackUserId: row.black_user_id,
     whiteUserId: row.white_user_id,

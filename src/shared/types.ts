@@ -2,6 +2,8 @@ export type PlayerColor = "black" | "white";
 
 export type GameStatus = "waiting" | "active" | "ended";
 
+export type GameMode = "public" | "cpu" | "friend";
+
 export type PieceType =
   | "pawn"
   | "lance"
@@ -63,6 +65,7 @@ export type GamePlayer = UserSummary & {
 
 export type GameSnapshot = {
   id: string;
+  mode: GameMode;
   status: GameStatus;
   sfen: string;
   currentTurn: PlayerColor;
@@ -84,6 +87,7 @@ export type GameSnapshot = {
 export type GameSummary = Pick<
   GameSnapshot,
   | "id"
+  | "mode"
   | "status"
   | "currentTurn"
   | "version"

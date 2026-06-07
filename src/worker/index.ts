@@ -3,7 +3,8 @@ import { Hono } from "hono";
 import { z } from "zod";
 
 import type { GamesResponse, SessionPayload } from "../shared/types";
-import { authMiddleware, currentSession, login, logout, register } from "./auth";
+import { authMiddleware, currentSession, login, logout, register, updateProfile } from "./auth";
+import { sha256Base64Url } from "./crypto";
 import type { AppEnv, Env } from "./env";
 import { GameRoom } from "./game-room";
 import { canViewGame, loadGameEvents, listGameSummariesForUser } from "./game-store";
@@ -25,14 +26,21 @@ const passwordSchema = z.string().min(8).max(128);
 
 const registerSchema = z.object({
   handle: handleSchema,
-  displayName: displayNameSchema,
   password: passwordSchema,
-  email: z.email().max(254).optional().or(z.literal("")),
 });
 
 const loginSchema = z.object({
   handle: handleSchema,
   password: passwordSchema,
+});
+
+const profileSchema = z.object({
+  displayName: displayNameSchema,
+});
+
+const createGameSchema = z.object({
+  mode: z.enum(["public", "cpu", "friend"]).default("public"),
+  passcode: z.string().trim().min(4).max(64).optional(),
 });
 
 const moveSchema = z.object({
@@ -76,6 +84,14 @@ app.post("/api/auth/logout", async (c) => {
   return c.json<SessionPayload>({ user: null });
 });
 
+app.use("/api/profile", authMiddleware());
+
+app.patch("/api/profile", zValidator("json", profileSchema), async (c) => {
+  ensureSameOrigin(c);
+  const user = await updateProfile(c, c.get("user"), c.req.valid("json"));
+  return c.json<SessionPayload>({ user });
+});
+
 app.use("/api/games", authMiddleware());
 app.use("/api/games/*", authMiddleware());
 
@@ -84,11 +100,20 @@ app.get("/api/games", async (c) => {
   return c.json<GamesResponse>({ games });
 });
 
-app.post("/api/games", async (c) => {
+app.post("/api/games", zValidator("json", createGameSchema), async (c) => {
   ensureSameOrigin(c);
+  const input = c.req.valid("json");
+  if (input.mode === "friend") {
+    const passcode = input.passcode?.trim();
+    if (!passcode) {
+      throw new HttpError(400, "passcode_required", "友達対戦には合言葉が必要です。");
+    }
+    return createOrJoinFriendGame(c.env, c.get("user").id, passcode);
+  }
   const gameId = crypto.randomUUID();
   return callGameRoom(c.env, gameId, c.get("user").id, "/create", {
     method: "POST",
+    headers: { "x-game-mode": input.mode },
   });
 });
 
@@ -168,6 +193,52 @@ function callGameRoom(
     ...init,
     headers,
   });
+}
+
+async function createOrJoinFriendGame(
+  env: Env,
+  userId: string,
+  passcode: string,
+): Promise<Response> {
+  const passcodeHash = await sha256Base64Url(passcode);
+  const existing = await env.DB.prepare(
+    `SELECT friend_rooms.game_id, games.black_user_id, games.status
+     FROM friend_rooms
+     JOIN games ON games.id = friend_rooms.game_id
+     WHERE friend_rooms.passcode_hash = ?1
+     LIMIT 1`,
+  )
+    .bind(passcodeHash)
+    .first<{ game_id: string; black_user_id: string; status: string }>();
+  if (existing?.status === "waiting") {
+    if (existing.black_user_id === userId) {
+      return callGameRoom(env, existing.game_id, userId, "/snapshot");
+    }
+    return callGameRoom(env, existing.game_id, userId, "/join", { method: "POST" });
+  }
+  if (existing) {
+    await env.DB.prepare("DELETE FROM friend_rooms WHERE passcode_hash = ?1")
+      .bind(passcodeHash)
+      .run();
+  }
+  const now = new Date().toISOString();
+  const gameId = crypto.randomUUID();
+  const response = await callGameRoom(env, gameId, userId, "/create", {
+    method: "POST",
+    headers: { "x-game-mode": "friend" },
+  });
+  if (response.ok) {
+    await env.DB.prepare(
+      `INSERT INTO friend_rooms (passcode_hash, game_id, created_at, updated_at)
+       VALUES (?1, ?2, ?3, ?4)
+       ON CONFLICT(passcode_hash) DO UPDATE
+       SET game_id = excluded.game_id,
+           updated_at = excluded.updated_at`,
+    )
+      .bind(passcodeHash, gameId, now, now)
+      .run();
+  }
+  return response;
 }
 
 function validGameId(value: string): string {

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { UserSummary } from "../src/shared/types";
 import {
   applyUsiMove,
+  chooseCpuMove,
   createInitialGame,
   snapshotFromStoredGame,
 } from "../src/worker/shogi";
@@ -47,6 +48,17 @@ describe("shogi rule boundary", () => {
       sfen: "k3+P4/9/9/9/9/9/9/9/4K4 w - 1",
     });
   });
+
+  it("chooses a CPU move that can be applied to the current position", () => {
+    const sfen = "lnsgkgsnl/1r5b1/ppppppppp/9/9/2P6/PP1PPPPPP/1B5R1/LNSGKGSNL w - 1";
+
+    const usi = chooseCpuMove(sfen);
+
+    expect(usi).toEqual(
+      expect.stringMatching(/^(?:[1-9][a-i][1-9][a-i]\+?|[PLNSGBR]\*[1-9][a-i])$/),
+    );
+    expect(applyUsiMove(sfen, usi ?? "")).toEqual(expect.objectContaining({ ok: true }));
+  });
 });
 
 describe("game snapshots", () => {
@@ -73,6 +85,7 @@ describe("game snapshots", () => {
     const blackKing = snapshot.board.find((square) => square.square === "5i");
 
     expect(snapshot.board).toHaveLength(81);
+    expect(snapshot.mode).toBe("public");
     expect(whiteKing?.piece).toEqual({ color: "white", type: "king", label: "玉" });
     expect(blackKing?.piece).toEqual({ color: "black", type: "king", label: "玉" });
     expect(snapshot.hands.black).toContainEqual({ type: "pawn", count: 1, label: "歩" });

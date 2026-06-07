@@ -11,14 +11,16 @@ const COOKIE_DEFAULT = "shogiwoshiyou_session";
 
 export type RegisterInput = {
   handle: string;
-  displayName: string;
   password: string;
-  email?: string | undefined;
 };
 
 export type LoginInput = {
   handle: string;
   password: string;
+};
+
+export type ProfileInput = {
+  displayName: string;
 };
 
 type UserRow = {
@@ -91,11 +93,7 @@ export async function register(c: Context<AppEnv>, input: RegisterInput): Promis
       c.env.DB.prepare(
         `INSERT INTO users (id, handle, display_name, created_at)
          VALUES (?1, ?2, ?3, ?4)`,
-      ).bind(userId, normalizedHandle, input.displayName.trim(), now),
-      c.env.DB.prepare(
-        `INSERT INTO user_private_profiles (user_id, email, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4)`,
-      ).bind(userId, normalizeEmail(input.email), now, now),
+      ).bind(userId, normalizedHandle, normalizedHandle, now),
       c.env.DB.prepare(
         `INSERT INTO user_credentials
          (user_id, password_salt, password_hash, password_iterations, created_at, updated_at)
@@ -109,7 +107,7 @@ export async function register(c: Context<AppEnv>, input: RegisterInput): Promis
     throw error;
   }
 
-  const user = { id: userId, handle: normalizedHandle, displayName: input.displayName.trim() };
+  const user = { id: userId, handle: normalizedHandle, displayName: normalizedHandle };
   await createSession(c, user.id);
   return user;
 }
@@ -155,6 +153,23 @@ export async function logout(c: Context<AppEnv>): Promise<void> {
   deleteCookie(c, sessionCookieName(c.env), { path: "/" });
 }
 
+export async function updateProfile(
+  c: Context<AppEnv>,
+  user: UserSummary,
+  input: ProfileInput,
+): Promise<UserSummary> {
+  const displayName = input.displayName.trim();
+  await c.env.DB.prepare(
+    `UPDATE users
+     SET display_name = ?1
+     WHERE id = ?2
+       AND retired_at IS NULL`,
+  )
+    .bind(displayName, user.id)
+    .run();
+  return { ...user, displayName };
+}
+
 async function createSession(c: Context<AppEnv>, userId: string): Promise<void> {
   const token = randomToken();
   const tokenHash = await sha256Base64Url(token);
@@ -185,12 +200,4 @@ function toUserSummary(row: UserRow): UserSummary {
 
 function normalizeHandle(handle: string): string {
   return handle.trim().toLowerCase();
-}
-
-function normalizeEmail(email: string | undefined): string | null {
-  const value = email?.trim().toLowerCase();
-  if (!value) {
-    return null;
-  }
-  return value;
 }

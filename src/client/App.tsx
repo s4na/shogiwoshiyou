@@ -14,6 +14,7 @@ import {
   playMove,
   registerAccount,
   resignGame,
+  updateProfile,
 } from "./api";
 import {
   dropUsi,
@@ -25,6 +26,7 @@ import {
 import type {
   BoardPiece,
   GameEvent,
+  GameMode,
   GameSnapshot,
   GameSummary,
   HandPieceType,
@@ -43,6 +45,7 @@ const notice = signal<string | null>(null);
 const busy = signal(false);
 const connection = signal<"idle" | "connecting" | "live" | "reconnecting" | "polling">("idle");
 const authMode = signal<"register" | "login">("register");
+const gameMode = signal<GameMode>("public");
 
 const signedIn = computed(() => user.value !== null && user.value !== undefined);
 
@@ -93,6 +96,20 @@ function SessionArea() {
   return (
     <div class="session-area">
       <span class="session-chip">{user.value.displayName}</span>
+      <form class="profile-form" onSubmit={(event) => void submitProfile(event)}>
+        <label for="profile-display-name">表示名</label>
+        <input
+          id="profile-display-name"
+          name="displayName"
+          defaultValue={user.value.displayName}
+          required
+          minlength={1}
+          maxlength={32}
+          aria-describedby="profile-display-name-help"
+        />
+        <button type="submit" disabled={busy.value}>保存</button>
+        <span id="profile-display-name-help">1〜32文字。対局画面に表示されます。</span>
+      </form>
       <button type="button" class="ghost-button" onClick={() => void handleLogout()}>
         ログアウト
       </button>
@@ -124,33 +141,34 @@ function AuthPanel() {
         </button>
       </div>
       <form class="auth-form" onSubmit={(event) => void submitAuth(event)}>
-        <label>
-          <span>ハンドル</span>
-          <input name="handle" autocomplete="username" required minlength={3} maxlength={24} />
-        </label>
-        {authMode.value === "register" ? (
-          <label>
-            <span>表示名</span>
-            <input name="displayName" required maxlength={32} />
-          </label>
-        ) : null}
-        <label>
-          <span>パスワード</span>
-          <input
-            name="password"
-            type="password"
-            autocomplete={authMode.value === "register" ? "new-password" : "current-password"}
-            required
-            minlength={8}
-            maxlength={128}
-          />
-        </label>
-        {authMode.value === "register" ? (
-          <label>
-            <span>メール</span>
-            <input name="email" type="email" autocomplete="email" />
-          </label>
-        ) : null}
+        <label for="auth-handle">ハンドル</label>
+        <input
+          id="auth-handle"
+          name="handle"
+          autocomplete="username"
+          required
+          minlength={3}
+          maxlength={24}
+          pattern="[A-Za-z0-9_]+"
+          aria-describedby="auth-handle-help"
+        />
+        <p id="auth-handle-help" class="field-help">
+          3〜24文字。半角英数字と _ のみ。ログインに使います。
+        </p>
+        <label for="auth-password">パスワード</label>
+        <input
+          id="auth-password"
+          name="password"
+          type="password"
+          autocomplete={authMode.value === "register" ? "new-password" : "current-password"}
+          required
+          minlength={8}
+          maxlength={128}
+          aria-describedby="auth-password-help"
+        />
+        <p id="auth-password-help" class="field-help">
+          8〜128文字。メールアドレスなどの個人情報は登録しません。
+        </p>
         <button type="submit" disabled={busy.value}>
           {authMode.value === "register" ? "登録して始める" : "ログイン"}
         </button>
@@ -168,9 +186,67 @@ function GameList() {
           更新
         </button>
       </div>
-      <button type="button" class="primary-action" onClick={() => void handleCreateGame()} disabled={busy.value}>
-        新しい対局
-      </button>
+      <form class="create-game-form" onSubmit={(event) => void submitCreateGame(event)}>
+        <fieldset>
+          <legend>対戦モード</legend>
+          <label>
+            <input
+              type="radio"
+              name="mode"
+              value="public"
+              checked={gameMode.value === "public"}
+              onChange={() => {
+                gameMode.value = "public";
+              }}
+            />
+            公開募集
+          </label>
+          <label>
+            <input
+              type="radio"
+              name="mode"
+              value="cpu"
+              checked={gameMode.value === "cpu"}
+              onChange={() => {
+                gameMode.value = "cpu";
+              }}
+            />
+            CPU対戦
+          </label>
+          <label>
+            <input
+              type="radio"
+              name="mode"
+              value="friend"
+              checked={gameMode.value === "friend"}
+              onChange={() => {
+                gameMode.value = "friend";
+              }}
+            />
+            友達対戦
+          </label>
+        </fieldset>
+        {gameMode.value === "friend" ? (
+          <>
+            <label for="friend-passcode">合言葉</label>
+            <input
+              id="friend-passcode"
+              name="passcode"
+              required
+              minlength={4}
+              maxlength={64}
+              autocomplete="off"
+              aria-describedby="friend-passcode-help"
+            />
+            <p id="friend-passcode-help" class="field-help">
+              4〜64文字。同じ合言葉を入力した相手と待ち合わせます。
+            </p>
+          </>
+        ) : null}
+        <button type="submit" class="primary-action" disabled={busy.value}>
+          {createGameButtonLabel()}
+        </button>
+      </form>
       <div class="game-list">
         {games.value.length === 0 ? <p class="empty">対局なし</p> : null}
         {games.value.map((game) => {
@@ -178,6 +254,7 @@ function GameList() {
             user.value !== null &&
             user.value !== undefined &&
             game.status === "waiting" &&
+            game.mode === "public" &&
             game.players.black.id !== user.value.id;
           return (
             <button
@@ -189,10 +266,10 @@ function GameList() {
               <span class="game-main">
                 <strong>{game.players.black.displayName}</strong>
                 <span>対</span>
-                <strong>{game.players.white?.displayName ?? "募集中"}</strong>
+                <strong>{game.players.white?.displayName ?? waitingLabel(game.mode)}</strong>
               </span>
               <span class="game-sub">
-                {game.status === "waiting" ? "募集中" : game.status === "active" ? `${String(game.moves.length)}手` : "終局"}
+                {modeLabel(game.mode)} / {game.status === "waiting" ? "募集中" : game.status === "active" ? `${String(game.moves.length)}手` : "終局"}
               </span>
             </button>
           );
@@ -223,7 +300,7 @@ function BoardArea() {
         <div>
           <span class="status-pill">{statusLabel(game)}</span>
           <h2>
-            {game.players.black.displayName} 対 {game.players.white?.displayName ?? "募集中"}
+            {game.players.black.displayName} 対 {game.players.white?.displayName ?? waitingLabel(game.mode)}
           </h2>
         </div>
         <div class="toolbar-actions">
@@ -374,6 +451,17 @@ async function submitAuth(event: SubmitEvent): Promise<void> {
   });
 }
 
+async function submitProfile(event: SubmitEvent): Promise<void> {
+  event.preventDefault();
+  const form = new FormData(event.currentTarget as HTMLFormElement);
+  const input = Object.fromEntries(form.entries());
+  await withBusy(async () => {
+    const session = await updateProfile(input);
+    user.value = session.user;
+    await refreshGames();
+  });
+}
+
 async function handleLogout(): Promise<void> {
   await withBusy(async () => {
     await logoutAccount();
@@ -393,9 +481,14 @@ async function refreshGames(): Promise<void> {
   games.value = response.games;
 }
 
-async function handleCreateGame(): Promise<void> {
+async function submitCreateGame(event: SubmitEvent): Promise<void> {
+  event.preventDefault();
+  const form = new FormData(event.currentTarget as HTMLFormElement);
+  const mode = (form.get("mode") ?? "public") as GameMode;
+  const passcodeEntry = form.get("passcode");
+  const passcode = typeof passcodeEntry === "string" ? passcodeEntry.trim() : "";
   await withBusy(async () => {
-    const response = await createGame();
+    const response = await createGame({ mode, ...(mode === "friend" ? { passcode } : {}) });
     applyGameSnapshot(response.game);
     await refreshGames();
     connectRealtime(response.game.id);
@@ -642,6 +735,32 @@ function statusLabel(game: GameSnapshot): string {
     return `${game.winner.displayName} 勝ち`;
   }
   return "終局";
+}
+
+function modeLabel(mode: GameMode): string {
+  switch (mode) {
+    case "public":
+      return "公開募集";
+    case "cpu":
+      return "CPU対戦";
+    case "friend":
+      return "友達対戦";
+  }
+}
+
+function waitingLabel(mode: GameMode): string {
+  return mode === "cpu" ? "CPU" : "募集中";
+}
+
+function createGameButtonLabel(): string {
+  switch (gameMode.value) {
+    case "public":
+      return "公開募集を作る";
+    case "cpu":
+      return "CPUと始める";
+    case "friend":
+      return "合言葉で待ち合わせる";
+  }
 }
 
 function boardSquareLabel(square: string, piece: BoardPiece | null, selected: boolean): string {
