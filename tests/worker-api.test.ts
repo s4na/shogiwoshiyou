@@ -1,10 +1,26 @@
 import { describe, expect, it } from "vitest";
 
 import app, { GameRoom } from "../src/worker";
+import { currentTermsHash, TERMS_TEXT } from "../src/shared/terms";
 import type { Env } from "../src/worker/env";
 import type { StoredGame } from "../src/worker/shogi";
 
-const CURRENT_TERMS_HASH = "0d9f425fb15da71567d8619b0024f52ee844e8ea5735d56b1ce0bdfe225856a2";
+const CURRENT_TERMS_HASH = "e81728efef17355563e16e21614ec615878043eb96cbbfffb2a4d6cbec6b8dba";
+const TERMS_PLACEHOLDERS = [
+  "［運営者名］",
+  "［アプリ名］",
+  "［メールアドレスまたは問い合わせフォームURL］",
+  "［月］",
+  "［日］",
+] as const;
+
+describe("terms text", () => {
+  it("does not leave unresolved placeholders in the published terms", () => {
+    for (const placeholder of TERMS_PLACEHOLDERS) {
+      expect(TERMS_TEXT).not.toContain(placeholder);
+    }
+  });
+});
 
 describe("auth API", () => {
   it("rejects registration when the terms are not accepted", async () => {
@@ -562,6 +578,7 @@ async function registerViaApi(
   origin: string,
   handle: string,
 ): Promise<{ cookie: string; userId: string }> {
+  const termsHash = await currentTermsHash();
   const response = await app.request(
     `${origin}/api/auth/register`,
     {
@@ -574,7 +591,7 @@ async function registerViaApi(
         handle,
         password: "password123",
         termsAccepted: true,
-        termsHash: CURRENT_TERMS_HASH,
+        termsHash,
       }),
     },
     env,
