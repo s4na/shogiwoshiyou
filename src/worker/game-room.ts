@@ -83,8 +83,20 @@ export class GameRoom implements DurableObject {
       if (error instanceof DuplicateRequest) {
         return error.response;
       }
+      if (error instanceof StaleGameWrite) {
+        const latest = await this.loadGameById(error.gameId);
+        if (latest) {
+          return this.snapshotResponse(latest);
+        }
+      }
       if (error instanceof RoomError) {
         return jsonError(error.status, error.code, error.message);
+      }
+      if (isClientRequestConflict(error)) {
+        const latest = await this.loadGame();
+        if (latest) {
+          return this.snapshotResponse(latest);
+        }
       }
       console.error(error);
       return jsonError(500, "internal_error", "サーバー内でエラーが発生しました。");
@@ -507,7 +519,8 @@ export class GameRoom implements DurableObject {
     eventOrEvents: PersistableEvent | PersistableEvent[],
   ): Promise<void> {
     const events = Array.isArray(eventOrEvents) ? eventOrEvents : [eventOrEvents];
-    await this.env.DB.batch([
+    const expectedVersion = game.version - events.length;
+    const results = await this.env.DB.batch([
       this.env.DB.prepare(
         `UPDATE games
          SET white_user_id = ?2,
@@ -519,7 +532,8 @@ export class GameRoom implements DurableObject {
              end_reason = ?8,
              version = ?9,
              updated_at = ?10
-         WHERE id = ?1`,
+         WHERE id = ?1
+           AND version = ?11`,
       ).bind(
         game.id,
         game.whiteUserId,
@@ -531,16 +545,24 @@ export class GameRoom implements DurableObject {
         game.endReason,
         game.version,
         game.updatedAt,
+        expectedVersion,
       ),
       ...events.map((event) => this.insertEventStatement(game, event)),
     ]);
+    const updateResult = results[0] as { meta?: { changes?: number } } | undefined;
+    if (updateResult?.meta?.changes === 0) {
+      throw new StaleGameWrite(game.id);
+    }
   }
 
   private insertEventStatement(game: StoredGame, event: PersistableEvent): D1PreparedStatement {
     return this.env.DB.prepare(
       `INSERT INTO game_events
        (id, game_id, seq, type, actor_user_id, payload_json, client_request_id, created_at)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)`,
+       SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8
+       WHERE EXISTS (
+         SELECT 1 FROM games WHERE id = ?9 AND version = ?10
+       )`,
     ).bind(
       crypto.randomUUID(),
       game.id,
@@ -550,6 +572,8 @@ export class GameRoom implements DurableObject {
       JSON.stringify(event.payload),
       event.clientRequestId,
       event.createdAt ?? game.updatedAt,
+      game.id,
+      game.version,
     );
   }
 }
@@ -577,6 +601,20 @@ class DuplicateRequest extends RoomError {
   constructor(public readonly response: Response) {
     super(200, "duplicate_request", "同じ操作はすでに処理されています。");
   }
+}
+
+class StaleGameWrite extends RoomError {
+  constructor(public readonly gameId: string) {
+    super(409, "stale_game", "対局状態が更新されています。");
+  }
+}
+
+function isClientRequestConflict(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    /UNIQUE constraint failed/i.test(error.message) &&
+    error.message.includes("game_events")
+  );
 }
 
 function jsonError(status: number, code: string, message: string): Response {

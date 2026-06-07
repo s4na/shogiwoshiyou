@@ -422,6 +422,9 @@ class FakeStatement {
 
   run(): Promise<unknown> {
     if (this.sql.includes("UPDATE games")) {
+      if (Number(this.values[10]) !== Number(this.db.rowForGame().version)) {
+        return Promise.resolve({ meta: { changes: 0 }, success: true });
+      }
       this.db.updatedGame = {
         id: this.values[0],
         white_user_id: this.values[1],
@@ -435,8 +438,12 @@ class FakeStatement {
         updated_at: this.values[9],
       };
       this.db.applyUpdatedGame(this.db.updatedGame);
+      return Promise.resolve({ meta: { changes: 1 }, success: true });
     }
     if (this.sql.includes("INSERT INTO game_events")) {
+      if (Number(this.values[9]) !== Number(this.db.rowForGame().version)) {
+        return Promise.resolve({ meta: { changes: 0 }, success: true });
+      }
       this.db.insertedEvents.push({
         id: this.values[0],
         game_id: this.values[1],
@@ -447,6 +454,7 @@ class FakeStatement {
         client_request_id: this.values[6],
         created_at: this.values[7],
       });
+      return Promise.resolve({ meta: { changes: 1 }, success: true });
     }
     return Promise.resolve({ success: true });
   }
