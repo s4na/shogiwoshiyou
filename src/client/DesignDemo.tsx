@@ -137,7 +137,7 @@ function ColorTokens({ theme: t }: { theme: Theme }) {
 }
 
 function RadiusTokens({ theme: t }: { theme: Theme }) {
-  const entries = Object.entries(R) as [string, number][];
+  const entries = Object.entries(R);
   return (
     <SubSection title="角丸 (R)">
       <Row gap={20}>
@@ -152,7 +152,7 @@ function RadiusTokens({ theme: t }: { theme: Theme }) {
                 border: `2px solid ${t.accent.gold}`,
               }}
             />
-            <TokenLabel top={`R.${key}`} bottom={`${val}px`} />
+            <TokenLabel top={`R.${key}`} bottom={`${String(val)}px`} />
           </div>
         ))}
       </Row>
@@ -161,7 +161,7 @@ function RadiusTokens({ theme: t }: { theme: Theme }) {
 }
 
 function ShadowTokens({ theme: t }: { theme: Theme }) {
-  const entries = Object.entries(t.shadow) as [string, string][];
+  const entries = Object.entries(t.shadow);
   return (
     <SubSection title="シャドウ (shadow)">
       <Row gap={20}>
@@ -210,7 +210,7 @@ function BorderTokens({ theme: t }: { theme: Theme }) {
 function MotionTokens() {
   const t = useTheme();
   const [triggered, setTrigger] = useState<string | null>(null);
-  const entries = Object.entries(MOTION) as [string, string][];
+  const entries = Object.entries(MOTION);
 
   function fire(key: string) {
     setTrigger(null);
@@ -253,7 +253,7 @@ function ZIndexTokens() {
   return (
     <SubSection title="Z-index (ZINDEX)">
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-        {(Object.entries(ZINDEX) as [string, number][]).map(([key, val]) => (
+        {Object.entries(ZINDEX).map(([key, val]) => (
           <div
             key={key}
             style={{
@@ -482,7 +482,7 @@ function FormControls() {
             { title: "敗北", accent: "#C41E3A", body: "朱アクセント" },
           ] as const).map(({ title, accent, body }) => (
             <div key={title} style={{ width: 180 }}>
-              <Card title={title} accent={accent}>
+              <Card title={title} {...(accent !== undefined ? { accent } : {})}>
                 <p style={{ fontFamily: fG, fontSize: 13, margin: 0 }}>{body}</p>
               </Card>
             </div>
