@@ -62,7 +62,7 @@ CREATE TABLE game_events (
   client_request_id TEXT,
   created_at TEXT NOT NULL,
   UNIQUE(game_id, seq),
-  UNIQUE(game_id, client_request_id)
+  UNIQUE(game_id, actor_user_id, client_request_id)
 );
 
 CREATE INDEX game_events_game_id_seq_idx ON game_events(game_id, seq);

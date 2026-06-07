@@ -13,7 +13,7 @@ describe("GameRoom moves", () => {
       sfen: "4k4/9/9/9/9/9/9/9/4K4 b - 1",
       currentTurn: "black",
     });
-    const db = new FakeD1(game, [requestId]);
+    const db = new FakeD1(game, [{ requestId, actorUserId: "black-user" }]);
     const room = createRoom(game, db);
 
     const response = await room.fetch(
@@ -29,7 +29,7 @@ describe("GameRoom moves", () => {
     expect(body.error?.code).toBe("not_player");
   });
 
-  it("returns a duplicate move snapshot to a player after the turn changed", async () => {
+  it("returns a duplicate move snapshot to the original player after the turn changed", async () => {
     const requestId = "00000000-0000-4000-8000-000000000004";
     const game = storedGame({
       mode: "friend",
@@ -40,13 +40,13 @@ describe("GameRoom moves", () => {
       lastEventSeq: 2,
       version: 1,
     });
-    const db = new FakeD1(game, [requestId]);
+    const db = new FakeD1(game, [{ requestId, actorUserId: "black-user" }]);
     const room = createRoom(game, db);
 
     const response = await room.fetch(
       new Request("https://game-room/move", {
         method: "POST",
-        headers: { "x-user-id": "white-user" },
+        headers: { "x-user-id": "black-user" },
         body: JSON.stringify({ usi: "5i5h", requestId }),
       }),
     );
@@ -56,13 +56,47 @@ describe("GameRoom moves", () => {
     expect(body.game?.currentTurn).toBe("white");
   });
 
+  it("does not treat another player's reused move request id as a duplicate", async () => {
+    const requestId = "00000000-0000-4000-8000-000000000005";
+    const game = storedGame({
+      mode: "friend",
+      whiteUserId: "white-user",
+      sfen: "4k4/9/9/9/9/9/9/4r4/4K4 w - 1",
+      currentTurn: "white",
+      moves: ["5i5h"],
+      lastEventSeq: 2,
+      version: 1,
+    });
+    const db = new FakeD1(game, [{ requestId, actorUserId: "black-user" }]);
+    const room = createRoom(game, db);
+
+    const response = await room.fetch(
+      new Request("https://game-room/move", {
+        method: "POST",
+        headers: { "x-user-id": "white-user" },
+        body: JSON.stringify({ usi: "5h5g", requestId }),
+      }),
+    );
+    const body: { game?: { currentTurn?: string } } = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.game?.currentTurn).toBe("black");
+    expect(db.insertedEvents).toContainEqual(
+      expect.objectContaining({
+        type: "move.played",
+        actor_user_id: "white-user",
+        client_request_id: requestId,
+      }),
+    );
+  });
+
   it("does not return a duplicate resign snapshot to a non-player", async () => {
     const requestId = "00000000-0000-4000-8000-000000000003";
     const game = storedGame({
       mode: "friend",
       whiteUserId: "white-user",
     });
-    const db = new FakeD1(game, [requestId]);
+    const db = new FakeD1(game, [{ requestId, actorUserId: "black-user" }]);
     const room = createRoom(game, db);
 
     const response = await room.fetch(
@@ -264,11 +298,16 @@ class FakeD1 {
   insertedEvents: Record<string, unknown>[] = [];
   batchStatementTypes: string[][] = [];
   private currentGame: StoredGame;
-  private readonly duplicateRequestIds: Set<string>;
+  private readonly duplicateRequests: Set<string>;
 
-  constructor(game: StoredGame, duplicateRequestIds: string[] = []) {
+  constructor(
+    game: StoredGame,
+    duplicateRequests: { requestId: string; actorUserId: string }[] = [],
+  ) {
     this.currentGame = game;
-    this.duplicateRequestIds = new Set(duplicateRequestIds);
+    this.duplicateRequests = new Set(
+      duplicateRequests.map((request) => `${request.requestId}:${request.actorUserId}`),
+    );
   }
 
   prepare(sql: string): FakeStatement {
@@ -303,8 +342,12 @@ class FakeD1 {
     };
   }
 
-  hasDuplicateRequestId(requestId: unknown): boolean {
-    return typeof requestId === "string" && this.duplicateRequestIds.has(requestId);
+  hasDuplicateRequestId(requestId: unknown, actorUserId: unknown): boolean {
+    return (
+      typeof requestId === "string" &&
+      typeof actorUserId === "string" &&
+      this.duplicateRequests.has(`${requestId}:${actorUserId}`)
+    );
   }
 
   applyUpdatedGame(row: Record<string, unknown>): void {
@@ -349,7 +392,14 @@ class FakeStatement {
 
   first<T>(): Promise<T | null> {
     if (this.sql.includes("FROM game_events")) {
-      return Promise.resolve(this.db.hasDuplicateRequestId(this.values[1]) ? ({ id: "event-1" } as T) : null);
+      if (!this.sql.includes("actor_user_id = ?3")) {
+        return Promise.resolve(null);
+      }
+      return Promise.resolve(
+        this.db.hasDuplicateRequestId(this.values[1], this.values[2])
+          ? ({ id: "event-1" } as T)
+          : null,
+      );
     }
     if (this.sql.includes("FROM games")) {
       return Promise.resolve(this.db.rowForGame() as T);
