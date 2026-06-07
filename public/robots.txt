@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+
+# Indexing is disabled with robots meta tags and X-Robots-Tag headers.
+# Do not disallow crawling here; crawlers need to fetch pages to observe noindex.
