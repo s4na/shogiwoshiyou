@@ -1,12 +1,19 @@
 import { describe, expect, it } from "vitest";
 
 import type { GameSnapshot } from "../src/shared/types";
-import { dropUsi, myColor, promotionMoveOptions } from "../src/client/shogi-ui";
+import { dropUsi, moveNotationLabel, moveUsiTitle, myColor, promotionMoveOptions } from "../src/client/shogi-ui";
 
 describe("client shogi helpers", () => {
   it("builds USI drops from hand pieces", () => {
     expect(dropUsi("pawn", "5e")).toBe("P*5e");
     expect(dropUsi("rook", "2b")).toBe("R*2b");
+  });
+
+  it("uses readable notation as the visible move label and keeps USI as supplemental text", () => {
+    const move = { ply: 1, usi: "7g7f", notation: "７六歩" };
+
+    expect(moveNotationLabel(move)).toBe("７六歩");
+    expect(moveUsiTitle(move)).toBe("7g7f");
   });
 
   it("detects a player color from a game snapshot", () => {

@@ -1,4 +1,11 @@
-import type { BoardPiece, BoardSquare, GameSnapshot, HandPieceType, PlayerColor } from "../shared/types";
+import type {
+  BoardPiece,
+  BoardSquare,
+  GameMove,
+  GameSnapshot,
+  HandPieceType,
+  PlayerColor,
+} from "../shared/types";
 
 const DROP_CODES: Record<HandPieceType, string> = {
   pawn: "P",
@@ -15,6 +22,14 @@ const RANKS = "abcdefghi";
 
 export function dropUsi(type: HandPieceType, to: string): string {
   return `${DROP_CODES[type]}*${to}`;
+}
+
+export function moveNotationLabel(move: GameMove): string {
+  return move.notation;
+}
+
+export function moveUsiTitle(move: GameMove): string {
+  return move.usi;
 }
 
 export function myColor(game: GameSnapshot, userId: string): PlayerColor | null {

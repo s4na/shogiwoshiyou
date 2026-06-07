@@ -17,6 +17,8 @@ import {
 } from "./api";
 import {
   dropUsi,
+  moveNotationLabel,
+  moveUsiTitle,
   myColor,
   orderedBoardSquares,
   promotionMoveOptions,
@@ -388,7 +390,7 @@ function HistoryPanel() {
           {game.moves.map((move) => (
             <li key={move.ply}>
               <span>{move.ply}</span>
-              <code>{move.usi}</code>
+              <code title={moveUsiTitle(move)}>{moveNotationLabel(move)}</code>
             </li>
           ))}
         </ol>
