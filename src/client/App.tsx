@@ -652,12 +652,16 @@ function ShogiBoard({
   const lastMoveUsi = game.moves[game.moves.length - 1]?.usi ?? "";
   const lastFrom = lastMoveUsi.slice(0, 2);
   const lastTo = lastMoveUsi.slice(2, 4);
+  const color = user.value ? myColor(game, user.value.id) : null;
+  const canShowLegalDestinations = color !== null && game.currentTurn === color;
   const legalDestinations = new Set(
-    selectedSquare.value
-      ? legalMoveDestinations(game, selectedSquare.value)
-      : selectedHand.value
-        ? legalDropDestinations(game, selectedHand.value)
-        : [],
+    canShowLegalDestinations
+      ? selectedSquare.value
+        ? legalMoveDestinations(game, selectedSquare.value)
+        : selectedHand.value
+          ? legalDropDestinations(game, selectedHand.value)
+          : []
+      : [],
   );
 
   return (
@@ -1056,11 +1060,12 @@ async function handleSquareClick(square: string): Promise<void> {
   const myTurn = game.currentTurn === color;
   const boardSquare = game.board.find((candidate) => candidate.square === square);
   if (selectedHand.value) {
-    if (myTurn) { await submitMove(dropUsi(selectedHand.value, square)); return; }
     if (boardSquare?.piece?.color === color) {
       selectedHand.value = null;
       selectedSquare.value = square;
+      return;
     }
+    if (myTurn) { await submitMove(dropUsi(selectedHand.value, square)); return; }
     return;
   }
   if (!selectedSquare.value) {
