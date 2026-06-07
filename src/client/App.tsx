@@ -33,6 +33,8 @@ import {
   Toast,
   Modal,
   StatusChip,
+  Input,
+  FieldGroup,
   R,
   MOTION,
   ZINDEX,
@@ -325,7 +327,7 @@ function AuthScreen() {
         {/* Form */}
         <form onSubmit={(event) => void submitAuth(event)} style={{ display: "grid", gap: 16, padding: 24 }}>
           <FieldGroup id="auth-handle" label="ハンドル" helpId="auth-handle-help" help="3〜24文字。半角英数字と _ のみ。cpu は予約済み。">
-            <input
+            <Input
               id="auth-handle"
               name="handle"
               autoComplete="username"
@@ -334,12 +336,11 @@ function AuthScreen() {
               maxLength={24}
               pattern="[A-Za-z0-9_]+"
               aria-describedby="auth-handle-help"
-              style={inputStyle(t)}
             />
           </FieldGroup>
 
           <FieldGroup id="auth-password" label="パスワード" helpId="auth-password-help" help="8〜128文字。個人情報は登録しません。">
-            <input
+            <Input
               id="auth-password"
               name="password"
               type="password"
@@ -348,7 +349,6 @@ function AuthScreen() {
               minLength={8}
               maxLength={128}
               aria-describedby="auth-password-help"
-              style={inputStyle(t)}
             />
           </FieldGroup>
 
@@ -357,33 +357,6 @@ function AuthScreen() {
           </Btn>
         </form>
       </div>
-    </div>
-  );
-}
-
-function FieldGroup({
-  id,
-  label,
-  helpId,
-  help,
-  children,
-}: {
-  id: string;
-  label: string;
-  helpId: string;
-  help: string;
-  children: preact.ComponentChildren;
-}) {
-  const t = useTheme();
-  return (
-    <div style={{ display: "grid", gap: 6 }}>
-      <label htmlFor={id} style={{ fontFamily: fG, fontSize: 12, fontWeight: 600, color: t.text.secondary }}>
-        {label}
-      </label>
-      {children}
-      <p id={helpId} style={{ fontFamily: fG, fontSize: 11, color: t.text.tertiary, lineHeight: 1.4 }}>
-        {help}
-      </p>
     </div>
   );
 }
@@ -456,7 +429,7 @@ function GameListPanel() {
 
         {gameMode.value === "friend" && (
           <FieldGroup id="friend-passcode" label="合言葉" helpId="friend-passcode-help" help="12〜64文字。推測されにくい合言葉を相手だけに共有します。">
-            <input
+            <Input
               id="friend-passcode"
               name="passcode"
               required
@@ -464,7 +437,6 @@ function GameListPanel() {
               maxLength={64}
               autoComplete="off"
               aria-describedby="friend-passcode-help"
-              style={inputStyle(t)}
             />
           </FieldGroup>
         )}
@@ -963,19 +935,6 @@ function HistoryPanel() {
       )}
     </Card>
   );
-}
-
-// ─── Style helpers ────────────────────────────────────
-function inputStyle(t: Theme) {
-  return {
-    padding: "10px 14px",
-    borderRadius: R.md,
-    border: `1px solid ${t.border.default}`,
-    backgroundColor: t.bg.secondary,
-    color: t.text.primary,
-    fontSize: 13,
-    width: "100%",
-  } as const;
 }
 
 function statusColor(game: GameSnapshot, t: Theme): string {
