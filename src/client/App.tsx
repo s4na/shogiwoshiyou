@@ -489,7 +489,7 @@ function TermsPage() {
           </h2>
         </div>
         <div style={{ display: "grid", gap: 10, padding: 28 }}>
-          {lines.map((line, index) => renderTermsLine(line, index, t))}
+          {renderTermsBlocks(lines, t)}
           <div style={{ display: "flex", justifyContent: "flex-start", paddingTop: 8 }}>
             <Btn variant="secondary" size="md" onClick={() => { goHome(); }}>
               トップへ戻る
@@ -501,45 +501,93 @@ function TermsPage() {
   );
 }
 
-function renderTermsLine(line: string, index: number, t: Theme) {
-  const key = `${String(index)}-${line}`;
-  if (line === "" || line === "---" || line === "# 利用規約") {
-    return <div key={key} style={{ height: line === "" ? 6 : 1 }} />;
-  }
-  if (line.startsWith("## ")) {
-    return (
-      <h3
+function renderTermsBlocks(lines: string[], t: Theme) {
+  const blocks = [];
+  const listItemPattern = /^(\s*)(\d+)\.\s(.+)$/;
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index] ?? "";
+    const key = `${String(index)}-${line}`;
+    if (line === "" || line === "---" || line === "# 利用規約") {
+      blocks.push(<div key={key} style={{ height: line === "" ? 6 : 1 }} />);
+      continue;
+    }
+    if (line.startsWith("## ")) {
+      blocks.push(
+        <h3
+          key={key}
+          style={{
+            color: t.text.primary,
+            fontFamily: fS,
+            fontSize: 17,
+            fontWeight: 700,
+            lineHeight: 1.6,
+            marginTop: index === 0 ? 0 : 10,
+          }}
+        >
+          {line.slice(3)}
+        </h3>,
+      );
+      continue;
+    }
+
+    const listMatch = listItemPattern.exec(line);
+    if (listMatch) {
+      const [, indentText = "", startText = "1"] = listMatch;
+      const indent = indentText.length;
+      const groupStartIndex = index;
+      const items = [];
+      while (index < lines.length) {
+        const itemMatch = listItemPattern.exec(lines[index] ?? "");
+        if (!itemMatch) break;
+        const [, itemIndent = "", itemNumber = "1", itemText = ""] = itemMatch;
+        if (itemIndent.length !== indent) break;
+        items.push({ index, number: Number(itemNumber), text: itemText });
+        index += 1;
+      }
+      index -= 1;
+      blocks.push(
+        <ol
+          key={`${String(groupStartIndex)}-list`}
+          start={Number(startText)}
+          style={{
+            color: t.text.secondary,
+            fontFamily: fG,
+            fontSize: 14,
+            lineHeight: 1.8,
+            margin: 0,
+            marginLeft: indent > 0 ? 22 : 0,
+            paddingLeft: 22,
+          }}
+        >
+          {items.map((item) => (
+            <li key={`${String(item.index)}-${String(item.number)}-${item.text}`} style={{ paddingLeft: 4 }}>
+              {item.text}
+            </li>
+          ))}
+        </ol>,
+      );
+      continue;
+    }
+
+    const trimmed = line.trimStart();
+    const indent = line.length - trimmed.length;
+    blocks.push(
+      <p
         key={key}
         style={{
-          color: t.text.primary,
-          fontFamily: fS,
-          fontSize: 17,
-          fontWeight: 700,
-          lineHeight: 1.6,
-          marginTop: index === 0 ? 0 : 10,
+          color: t.text.secondary,
+          fontFamily: fG,
+          fontSize: 14,
+          lineHeight: 1.8,
+          marginLeft: indent > 0 ? 18 : 0,
+          whiteSpace: "pre-wrap",
         }}
       >
-        {line.slice(3)}
-      </h3>
+        {trimmed}
+      </p>,
     );
   }
-  const trimmed = line.trimStart();
-  const indent = line.length - trimmed.length;
-  return (
-    <p
-      key={key}
-      style={{
-        color: t.text.secondary,
-        fontFamily: fG,
-        fontSize: 14,
-        lineHeight: 1.8,
-        marginLeft: indent > 0 ? 18 : 0,
-        whiteSpace: "pre-wrap",
-      }}
-    >
-      {trimmed}
-    </p>
-  );
+  return blocks;
 }
 
 // ─── Play layout ──────────────────────────────────────
