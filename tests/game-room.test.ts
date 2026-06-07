@@ -55,7 +55,12 @@ describe("auth API", () => {
           "content-type": "application/json",
           origin,
         },
-        body: JSON.stringify({ handle: "terms_ok", password: "password123", termsAccepted: true }),
+        body: JSON.stringify({
+          handle: "terms_ok",
+          password: "password123",
+          termsAccepted: true,
+          termsHash: CURRENT_TERMS_HASH,
+        }),
       },
       env,
     );
@@ -68,6 +73,42 @@ describe("auth API", () => {
     expect(agreement?.user_id).toBe(body.user?.id);
     expect(agreement?.terms_hash).toBe(CURRENT_TERMS_HASH);
     expect(String(agreement?.agreed_at)).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+  });
+
+  it("rejects registration when the submitted terms hash does not match the current terms", async () => {
+    const db = new FakeD1(null);
+    const env = {
+      DB: db as unknown as D1Database,
+      GAME_ROOM: new FakeGameRoomNamespace(db) as unknown as DurableObjectNamespace,
+      SESSION_COOKIE_NAME: "sid",
+    } satisfies Env;
+    const origin = "http://localhost";
+    const userCountBefore = db.userCount();
+
+    const response = await app.request(
+      `${origin}/api/auth/register`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          origin,
+        },
+        body: JSON.stringify({
+          handle: "terms_old",
+          password: "password123",
+          termsAccepted: true,
+          termsHash: "0".repeat(64),
+        }),
+      },
+      env,
+    );
+    const body: { error?: { code?: string } } = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.error?.code).toBe("terms_hash_mismatch");
+    expect(response.headers.get("set-cookie")).toBeNull();
+    expect(db.userCount()).toBe(userCountBefore);
+    expect(db.termsAgreements).toHaveLength(0);
   });
 });
 
@@ -529,7 +570,12 @@ async function registerViaApi(
         "content-type": "application/json",
         origin,
       },
-      body: JSON.stringify({ handle, password: "password123", termsAccepted: true }),
+      body: JSON.stringify({
+        handle,
+        password: "password123",
+        termsAccepted: true,
+        termsHash: CURRENT_TERMS_HASH,
+      }),
     },
     env,
   );

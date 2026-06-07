@@ -58,7 +58,7 @@ import type {
   PieceType,
   UserSummary,
 } from "../shared/types";
-import { TERMS_SECTIONS, TERMS_UPDATED_AT } from "../shared/terms";
+import { currentTermsHash, TERMS_SECTIONS, TERMS_UPDATED_AT } from "../shared/terms";
 
 // ─── Global state ─────────────────────────────────────
 const user = signal<UserSummary | null | undefined>(undefined);
@@ -313,6 +313,22 @@ function SessionArea() {
 // ─── Auth ─────────────────────────────────────────────
 function AuthScreen() {
   const t = useTheme();
+  const [termsHash, setTermsHash] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    if (authMode.value !== "register") {
+      setTermsHash("");
+      return () => { active = false; };
+    }
+    void currentTermsHash().then((hash) => {
+      if (active) {
+        setTermsHash(hash);
+      }
+    });
+    return () => { active = false; };
+  }, [authMode.value]);
+
   return (
     <div
       style={{
@@ -389,6 +405,7 @@ function AuthScreen() {
 
           {authMode.value === "register" && (
             <div style={{ display: "grid", gap: 8 }}>
+              <input type="hidden" name="termsHash" value={termsHash} />
               <div style={{ display: "flex", alignItems: "flex-start", gap: 10, minHeight: 48, paddingTop: 6 }}>
                 <input
                   id="auth-terms"
@@ -428,7 +445,7 @@ function AuthScreen() {
             </div>
           )}
 
-          <Btn variant="primary" size="lg" full type="submit" disabled={busy.value}>
+          <Btn variant="primary" size="lg" full type="submit" disabled={busy.value || (authMode.value === "register" && !termsHash)}>
             {authMode.value === "register" ? "登録して始める" : "ログイン"}
           </Btn>
         </form>

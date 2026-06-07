@@ -1,9 +1,9 @@
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import type { Context, MiddlewareHandler } from "hono";
 
-import { TERMS_TEXT } from "../shared/terms";
+import { currentTermsHash } from "../shared/terms";
 import type { SessionPayload, UserSummary } from "../shared/types";
-import { constantTimeEqual, hashPassword, PASSWORD_ITERATIONS, randomToken, sha256Base64Url, sha256Hex } from "./crypto";
+import { constantTimeEqual, hashPassword, PASSWORD_ITERATIONS, randomToken, sha256Base64Url } from "./crypto";
 import type { AppEnv, Env } from "./env";
 import { HttpError } from "./http";
 
@@ -15,6 +15,7 @@ export type RegisterInput = {
   handle: string;
   password: string;
   termsAccepted: true;
+  termsHash: string;
 };
 
 export type LoginInput = {
@@ -94,7 +95,10 @@ export async function register(c: Context<AppEnv>, input: RegisterInput): Promis
   const salt = randomToken(18);
   const passwordHash = await hashPassword(input.password, salt);
   const termsAgreementId = crypto.randomUUID();
-  const termsHash = await sha256Hex(TERMS_TEXT);
+  const expectedTermsHash = await currentTermsHash();
+  if (input.termsHash !== expectedTermsHash) {
+    throw new HttpError(400, "terms_hash_mismatch", "利用規約を再読み込みしてください。");
+  }
 
   try {
     await c.env.DB.batch([
@@ -110,7 +114,7 @@ export async function register(c: Context<AppEnv>, input: RegisterInput): Promis
       c.env.DB.prepare(
         `INSERT INTO user_terms_agreements (id, user_id, terms_hash, agreed_at)
          VALUES (?1, ?2, ?3, ?4)`,
-      ).bind(termsAgreementId, userId, termsHash, now),
+      ).bind(termsAgreementId, userId, input.termsHash, now),
     ]);
   } catch (error) {
     if (String(error).includes("UNIQUE")) {

@@ -30,6 +30,7 @@ const registerSchema = z.object({
   handle: handleSchema,
   password: passwordSchema,
   termsAccepted: z.literal(true),
+  termsHash: z.string().regex(/^[a-f0-9]{64}$/),
 });
 
 const loginSchema = z.object({

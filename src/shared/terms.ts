@@ -39,3 +39,12 @@ export const TERMS_TEXT = [
   `最終更新日: ${TERMS_UPDATED_AT}`,
   ...TERMS_SECTIONS.flatMap((section) => [section.title, section.body]),
 ].join("\n");
+
+const encoder = new TextEncoder();
+
+export async function currentTermsHash(): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", encoder.encode(TERMS_TEXT));
+  return [...new Uint8Array(digest)]
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
