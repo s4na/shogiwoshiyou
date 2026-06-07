@@ -59,6 +59,21 @@ describe("shogi rule boundary", () => {
     );
     expect(applyUsiMove(sfen, usi ?? "")).toEqual(expect.objectContaining({ ok: true }));
   });
+
+  it("chooses a material gain when the CPU can safely capture a piece", () => {
+    const sfen = "4k4/9/4r4/4G4/9/9/9/9/4K4 w - 1";
+
+    const usi = chooseCpuMove(sfen);
+
+    expect(usi).toBe("5c5d");
+    expect(applyUsiMove(sfen, usi ?? "")).toEqual(
+      expect.objectContaining({
+        ok: true,
+        currentTurn: "black",
+        sfen: "4k4/9/9/4r4/9/9/9/9/4K4 b g 1",
+      }),
+    );
+  });
 });
 
 describe("game snapshots", () => {

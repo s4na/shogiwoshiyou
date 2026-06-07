@@ -53,6 +53,25 @@ export type MoveApplication =
     };
 
 const USI_MOVE_PATTERN = /^(?:[1-9][a-i][1-9][a-i]\+?|[PLNSGBR]\*[1-9][a-i])$/;
+const CPU_SEARCH_DEPTH = 2;
+const CHECK_BONUS = 80;
+const MATE_SCORE = 100_000;
+const PIECE_VALUES: Record<TsshogiPieceType, number> = {
+  [TsshogiPieceType.PAWN]: 100,
+  [TsshogiPieceType.LANCE]: 300,
+  [TsshogiPieceType.KNIGHT]: 320,
+  [TsshogiPieceType.SILVER]: 450,
+  [TsshogiPieceType.GOLD]: 520,
+  [TsshogiPieceType.BISHOP]: 800,
+  [TsshogiPieceType.ROOK]: 1_000,
+  [TsshogiPieceType.KING]: 20_000,
+  [TsshogiPieceType.PROM_PAWN]: 520,
+  [TsshogiPieceType.PROM_LANCE]: 520,
+  [TsshogiPieceType.PROM_KNIGHT]: 520,
+  [TsshogiPieceType.PROM_SILVER]: 520,
+  [TsshogiPieceType.HORSE]: 950,
+  [TsshogiPieceType.DRAGON]: 1_150,
+};
 
 export function createInitialGame(
   id: string,
@@ -84,9 +103,22 @@ export function chooseCpuMove(sfen: string): string | null {
   if (!position) {
     return null;
   }
+  const cpuColor = position.color;
   const moves = listLegalMoves(position);
-  moves.sort((a, b) => a.usi.localeCompare(b.usi));
-  return moves[0]?.usi ?? null;
+  let bestMove: Move | null = null;
+  let bestScore = -Infinity;
+  for (const move of moves.sort(compareMoves)) {
+    const next = position.clone();
+    if (!next.doMove(move)) {
+      continue;
+    }
+    const score = minimax(next, CPU_SEARCH_DEPTH - 1, cpuColor, -Infinity, Infinity);
+    if (score > bestScore || (score === bestScore && move.usi.localeCompare(bestMove?.usi ?? "") < 0)) {
+      bestMove = move;
+      bestScore = score;
+    }
+  }
+  return bestMove?.usi ?? null;
 }
 
 export function applyUsiMove(sfen: string, usi: string): MoveApplication {
@@ -263,6 +295,91 @@ function listLegalMoves(position: Position): Move[] {
     }
   }
   return moves;
+}
+
+function minimax(
+  position: Position,
+  depth: number,
+  cpuColor: TsshogiColor,
+  alpha: number,
+  beta: number,
+): number {
+  const moves = listLegalMoves(position).sort(compareMoves);
+  if (moves.length === 0) {
+    if (position.checked) {
+      return position.color === cpuColor ? -MATE_SCORE : MATE_SCORE;
+    }
+    return evaluatePosition(position, cpuColor);
+  }
+  if (depth === 0) {
+    return evaluatePosition(position, cpuColor);
+  }
+  if (position.color === cpuColor) {
+    let best = -Infinity;
+    let currentAlpha = alpha;
+    for (const move of moves) {
+      const next = position.clone();
+      if (!next.doMove(move)) {
+        continue;
+      }
+      best = Math.max(best, minimax(next, depth - 1, cpuColor, currentAlpha, beta));
+      currentAlpha = Math.max(currentAlpha, best);
+      if (currentAlpha >= beta) {
+        break;
+      }
+    }
+    return best;
+  }
+  let best = Infinity;
+  let currentBeta = beta;
+  for (const move of moves) {
+    const next = position.clone();
+    if (!next.doMove(move)) {
+      continue;
+    }
+    best = Math.min(best, minimax(next, depth - 1, cpuColor, alpha, currentBeta));
+    currentBeta = Math.min(currentBeta, best);
+    if (alpha >= currentBeta) {
+      break;
+    }
+  }
+  return best;
+}
+
+function evaluatePosition(position: Position, cpuColor: TsshogiColor): number {
+  let score = position.checked ? (position.color === cpuColor ? -CHECK_BONUS : CHECK_BONUS) : 0;
+  for (const square of Square.all) {
+    const piece = position.board.at(square);
+    if (!piece) {
+      continue;
+    }
+    const advancement =
+      (piece.color === TsshogiColor.BLACK ? 5 - square.rank : square.rank - 5) * 6;
+    const center = (5 - Math.abs(5 - square.file) - Math.abs(5 - square.rank)) * 3;
+    const value = PIECE_VALUES[piece.type] + advancement + center;
+    score += piece.color === cpuColor ? value : -value;
+  }
+  for (const color of [TsshogiColor.BLACK, TsshogiColor.WHITE]) {
+    const sign = color === cpuColor ? 1 : -1;
+    const hand = position.hand(color);
+    for (const type of handPieceTypes) {
+      score += sign * hand.count(type) * PIECE_VALUES[type] * 0.92;
+    }
+  }
+  return score;
+}
+
+function compareMoves(a: Move, b: Move): number {
+  const captureDelta =
+    (b.capturedPieceType ? PIECE_VALUES[b.capturedPieceType] : 0) -
+    (a.capturedPieceType ? PIECE_VALUES[a.capturedPieceType] : 0);
+  if (captureDelta !== 0) {
+    return captureDelta;
+  }
+  if (a.promote !== b.promote) {
+    return a.promote ? -1 : 1;
+  }
+  return a.usi.localeCompare(b.usi);
 }
 
 function addLegalMove(position: Position, moves: Move[], move: Move | null): void {
