@@ -5,12 +5,14 @@ import {
   applyUsiMove,
   chooseCpuMove,
   createInitialGame,
+  endGameByCheckmate,
+  isCurrentPlayerCheckmated,
   snapshotFromStoredGame,
 } from "../src/worker/shogi";
 
 describe("shogi rule boundary", () => {
   it("accepts a legal opening move and flips the turn", () => {
-    const game = createInitialGame("game-1", "black-user", "2026-06-07T00:00:00.000Z");
+    const game = createInitialGame("game-1", "black-user", "2026-06-07T00:00:00.000Z", "cpu");
 
     const result = applyUsiMove(game.sfen, "7g7f");
 
@@ -22,7 +24,7 @@ describe("shogi rule boundary", () => {
   });
 
   it("rejects a syntactically valid but illegal move", () => {
-    const game = createInitialGame("game-1", "black-user", "2026-06-07T00:00:00.000Z");
+    const game = createInitialGame("game-1", "black-user", "2026-06-07T00:00:00.000Z", "cpu");
 
     const result = applyUsiMove(game.sfen, "7g7e");
 
@@ -74,6 +76,23 @@ describe("shogi rule boundary", () => {
       }),
     );
   });
+
+  it("detects when the current player has no legal escape from check", () => {
+    expect(isCurrentPlayerCheckmated("4k1R2/6R2/9/9/9/9/9/9/4K4 w - 1")).toBe(true);
+    expect(isCurrentPlayerCheckmated("4k4/9/9/9/9/9/9/9/4K4 w - 1")).toBe(false);
+  });
+
+  it("chooses an immediate checkmate when one is available", () => {
+    const sfen = "4k4/8R/9/9/9/9/9/3PPP3/4K4 w rg 1";
+
+    const usi = chooseCpuMove(sfen);
+
+    expect(usi).not.toBeNull();
+    expect(usi).toMatch(/^R\*[23789]i$/);
+    const applied = applyUsiMove(sfen, usi ?? "");
+    expect(applied).toEqual(expect.objectContaining({ ok: true }));
+    expect(isCurrentPlayerCheckmated(applied.ok ? applied.sfen : "")).toBe(true);
+  });
 });
 
 describe("game snapshots", () => {
@@ -83,7 +102,7 @@ describe("game snapshots", () => {
       ["black-user", { id: "black-user", handle: "sente", displayName: "先手" }],
       ["white-user", { id: "white-user", handle: "gote", displayName: "後手" }],
     ]);
-    const first = createInitialGame("game-1", "black-user", createdAt);
+    const first = createInitialGame("game-1", "black-user", createdAt, "cpu", "white-user");
     const game = {
       ...first,
       whiteUserId: "white-user",
@@ -109,5 +128,28 @@ describe("game snapshots", () => {
     expect(snapshot.players.white?.displayName).toBe("後手");
     expect(snapshot.moves).toEqual([{ ply: 1, usi: "P*5e" }]);
     expect(snapshot.currentTurn).toBe("black");
+  });
+
+  it("ends a game by checkmate with the opponent as winner", () => {
+    const game = createInitialGame(
+      "game-1",
+      "black-user",
+      "2026-06-07T00:00:00.000Z",
+      "cpu",
+      "cpu-basic",
+    );
+
+    const next = endGameByCheckmate(game, "cpu-basic", "2026-06-07T00:01:00.000Z");
+
+    expect(next).toEqual(
+      expect.objectContaining({
+        status: "ended",
+        winnerUserId: "black-user",
+        endReason: "checkmate",
+        version: 1,
+        lastEventSeq: 2,
+        updatedAt: "2026-06-07T00:01:00.000Z",
+      }),
+    );
   });
 });

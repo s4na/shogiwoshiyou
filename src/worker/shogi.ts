@@ -54,6 +54,7 @@ export type MoveApplication =
 
 const USI_MOVE_PATTERN = /^(?:[1-9][a-i][1-9][a-i]\+?|[PLNSGBR]\*[1-9][a-i])$/;
 const CHECK_BONUS = 80;
+const MATE_SCORE = 100_000;
 const PIECE_VALUES: Record<TsshogiPieceType, number> = {
   [TsshogiPieceType.PAWN]: 100,
   [TsshogiPieceType.LANCE]: 300,
@@ -75,7 +76,7 @@ export function createInitialGame(
   id: string,
   blackUserId: string,
   now: string,
-  mode: GameMode = "cpu",
+  mode: GameMode,
   whiteUserId: string | null = null,
 ): StoredGame {
   return {
@@ -110,13 +111,37 @@ export function chooseCpuMove(sfen: string): string | null {
     if (!next.doMove(move)) {
       continue;
     }
-    const score = evaluatePosition(next, cpuColor);
+    const score =
+      next.checked && listLegalMoves(next).length === 0
+        ? MATE_SCORE
+        : evaluatePosition(next, cpuColor);
     if (score > bestScore || (score === bestScore && move.usi.localeCompare(bestMove?.usi ?? "") < 0)) {
       bestMove = move;
       bestScore = score;
     }
   }
   return bestMove?.usi ?? null;
+}
+
+export function isCurrentPlayerCheckmated(sfen: string): boolean {
+  const position = Position.newBySFEN(sfen);
+  return Boolean(position?.checked && listLegalMoves(position).length === 0);
+}
+
+export function endGameByCheckmate(
+  game: StoredGame,
+  loserUserId: string,
+  now: string,
+): StoredGame {
+  return {
+    ...game,
+    status: "ended",
+    winnerUserId: opponentUserId(game, loserUserId),
+    endReason: "checkmate",
+    version: game.version + 1,
+    lastEventSeq: game.lastEventSeq + 1,
+    updatedAt: now,
+  };
 }
 
 export function applyUsiMove(sfen: string, usi: string): MoveApplication {

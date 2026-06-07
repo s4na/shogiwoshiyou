@@ -76,7 +76,7 @@ export type GameSnapshot = {
     white: GamePlayer | null;
   };
   winner: GamePlayer | null;
-  endReason: "resign" | "timeout" | "draw" | "foul" | null;
+  endReason: "resign" | "checkmate" | "timeout" | "draw" | "foul" | null;
   board: BoardSquare[];
   hands: Record<PlayerColor, HandPiece[]>;
   moves: GameMove[];

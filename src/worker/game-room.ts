@@ -5,14 +5,21 @@ import {
   applyUsiMove,
   chooseCpuMove,
   createInitialGame,
+  endGameByCheckmate,
   expectedUserForTurn,
+  isCurrentPlayerCheckmated,
   opponentUserId,
   playerColorForUser,
   snapshotFromStoredGame,
   type StoredGame,
 } from "./shogi";
 
-type GameEventType = "game.created" | "game.joined" | "move.played" | "game.resigned";
+type GameEventType =
+  | "game.created"
+  | "game.joined"
+  | "move.played"
+  | "game.resigned"
+  | "game.checkmated";
 
 const CPU_USER_ID = "cpu-basic";
 const CPU_MOVE_DELAY_MS = 800;
@@ -347,6 +354,9 @@ export class GameRoom implements DurableObject {
   private async playCpuMove(game: StoredGame): Promise<StoredGame> {
     const usi = chooseCpuMove(game.sfen);
     if (!usi) {
+      if (isCurrentPlayerCheckmated(game.sfen)) {
+        return await this.endByCheckmate(game, CPU_USER_ID);
+      }
       return game;
     }
     const applied = applyUsiMove(game.sfen, usi);
@@ -354,7 +364,7 @@ export class GameRoom implements DurableObject {
       return game;
     }
     const now = new Date().toISOString();
-    const next: StoredGame = {
+    const moved: StoredGame = {
       ...game,
       sfen: applied.sfen,
       moves: [...game.moves, usi],
@@ -363,14 +373,29 @@ export class GameRoom implements DurableObject {
       lastEventSeq: game.lastEventSeq + 1,
       updatedAt: now,
     };
-    await this.persistGame(next, {
+    await this.persistGame(moved, {
       type: "move.played",
       actorUserId: CPU_USER_ID,
       payload: {
         usi,
-        ply: next.moves.length,
+        ply: moved.moves.length,
         color: "white",
       },
+      clientRequestId: null,
+    });
+    if (isCurrentPlayerCheckmated(moved.sfen)) {
+      return await this.endByCheckmate(moved, game.blackUserId);
+    }
+    return moved;
+  }
+
+  private async endByCheckmate(game: StoredGame, loserUserId: string): Promise<StoredGame> {
+    const now = new Date().toISOString();
+    const next = endGameByCheckmate(game, loserUserId, now);
+    await this.persistGame(next, {
+      type: "game.checkmated",
+      actorUserId: loserUserId,
+      payload: { loserUserId, winnerUserId: next.winnerUserId },
       clientRequestId: null,
     });
     return next;
