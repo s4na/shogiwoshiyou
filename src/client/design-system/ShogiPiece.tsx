@@ -9,6 +9,7 @@ const KVB = "0 0 100 116";
 const KR = 1.12;
 const CO = 0.05;
 
+// SVG linearGradient id はドキュメント内でユニークである必要があるためカウンターで生成
 let _gid = 0;
 function nextGid() { return `sg${String(++_gid)}`; }
 

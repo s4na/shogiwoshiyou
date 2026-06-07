@@ -51,6 +51,9 @@ jobs:
       - name: Build
         run: pnpm build
 
+      - name: Build design demo
+        run: pnpm build:design
+
   zizmor:
     name: zizmor
     runs-on: ubuntu-latest

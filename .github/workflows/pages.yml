@@ -45,7 +45,7 @@ jobs:
           path: dist/design
 
   deploy:
-    name: deploy to GitHub Pages
+    name: deploy to github pages
     needs: build
     runs-on: ubuntu-latest
     permissions:

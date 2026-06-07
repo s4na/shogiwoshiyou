@@ -24,6 +24,6 @@ export type Theme = typeof LIGHT;
 
 export const R = { sm: 4, md: 8, lg: 12, xl: 16, full: 9999 };
 export const MOTION = { fast: "0.12s ease", normal: "0.2s ease", slow: "0.35s ease", spring: "0.4s cubic-bezier(0.34,1.56,0.64,1)" };
-export const ZINDEX = { base: 0, board: 10, piece: 20, highlight: 15, modal: 100, toast: 110, overlay: 90 };
+export const ZINDEX = { base: 0, board: 10, highlight: 15, piece: 20, overlay: 90, modal: 100, toast: 110 };
 export const fS = `"Shippori Mincho B1","Noto Serif JP",serif`;
 export const fG = `"Zen Kaku Gothic New","Noto Sans JP",sans-serif`;
