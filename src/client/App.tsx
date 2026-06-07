@@ -1343,7 +1343,10 @@ function showError(error: unknown): void {
   notice.value = "処理に失敗しました。";
 }
 
-function navigate(event: Event, path: string): void {
+function navigate(event: MouseEvent, path: string): void {
+  if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+    return;
+  }
   event.preventDefault();
   if (window.location.pathname !== path) {
     window.history.pushState(null, "", path);
