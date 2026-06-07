@@ -26,5 +26,5 @@
     "target": "ES2023",
     "types": ["@cloudflare/workers-types", "vite/client", "vitest"]
   },
-  "include": ["src", "tests", "vite.config.ts", "eslint.config.mjs"]
+  "include": ["src", "tests", "vite.config.ts"]
 }

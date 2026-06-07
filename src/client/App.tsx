@@ -347,21 +347,25 @@ function HandRow({
     <div class={`hand-row ${visibleColor}`}>
       <span class="hand-label">{visibleColor === "black" ? "先手" : "後手"}</span>
       {pieces.length === 0 ? <span class="hand-empty">なし</span> : null}
-      {pieces.map((piece) => (
-        <button
-          type="button"
-          key={piece.type}
-          class={ownHand && selectedHand.value === piece.type ? "hand-piece active" : "hand-piece"}
-          disabled={busy.value || !ownHand || game.status !== "active" || game.currentTurn !== visibleColor}
-          onClick={() => {
-            selectedSquare.value = null;
-            selectedHand.value = selectedHand.value === piece.type ? null : piece.type;
-          }}
-        >
-          {piece.label}
-          <span>{piece.count}</span>
-        </button>
-      ))}
+      {pieces.map((piece) => {
+        const selected = ownHand && selectedHand.value === piece.type;
+        return (
+          <button
+            type="button"
+            key={piece.type}
+            class={selected ? "hand-piece active" : "hand-piece"}
+            aria-pressed={selected}
+            disabled={busy.value || !ownHand || game.status !== "active" || game.currentTurn !== visibleColor}
+            onClick={() => {
+              selectedSquare.value = null;
+              selectedHand.value = selectedHand.value === piece.type ? null : piece.type;
+            }}
+          >
+            {piece.label}
+            <span>{piece.count}</span>
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -494,11 +498,14 @@ async function handleSquareClick(square: string): Promise<void> {
   if (busy.value) {
     return;
   }
+  if (promotionChoice.value) {
+    promotionChoice.value = null;
+    return;
+  }
   const color = myColor(game, user.value.id);
   if (!color || game.status !== "active" || game.currentTurn !== color) {
     return;
   }
-  promotionChoice.value = null;
   if (selectedHand.value) {
     await submitMove(dropUsi(selectedHand.value, square));
     return;

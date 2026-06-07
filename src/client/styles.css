@@ -505,7 +505,7 @@ code {
   }
 
   .board-grid {
-    width: min(92vw, 680px);
+    width: min(100%, 680px);
   }
 }
 
