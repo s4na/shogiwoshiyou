@@ -90,15 +90,15 @@ export async function register(c: Context<AppEnv>, input: RegisterInput): Promis
   if (RESERVED_HANDLES.has(normalizedHandle)) {
     throw new HttpError(409, "handle_reserved", "そのハンドルは予約されています。");
   }
+  const expectedTermsHash = await currentTermsHash();
+  if (input.termsHash !== expectedTermsHash) {
+    throw new HttpError(400, "terms_hash_mismatch", "利用規約を再読み込みしてください。");
+  }
   const now = new Date().toISOString();
   const userId = crypto.randomUUID();
   const salt = randomToken(18);
   const passwordHash = await hashPassword(input.password, salt);
   const termsAgreementId = crypto.randomUUID();
-  const expectedTermsHash = await currentTermsHash();
-  if (input.termsHash !== expectedTermsHash) {
-    throw new HttpError(400, "terms_hash_mismatch", "利用規約を再読み込みしてください。");
-  }
 
   try {
     await c.env.DB.batch([
