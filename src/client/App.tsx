@@ -123,6 +123,7 @@ function AuthPanel() {
         <button
           type="button"
           class={authMode.value === "register" ? "active" : ""}
+          aria-pressed={authMode.value === "register"}
           onClick={() => {
             authMode.value = "register";
           }}
@@ -132,6 +133,7 @@ function AuthPanel() {
         <button
           type="button"
           class={authMode.value === "login" ? "active" : ""}
+          aria-pressed={authMode.value === "login"}
           onClick={() => {
             authMode.value = "login";
           }}
@@ -220,13 +222,13 @@ function GameList() {
               id="friend-passcode"
               name="passcode"
               required
-              minlength={4}
+              minlength={12}
               maxlength={64}
               autocomplete="off"
               aria-describedby="friend-passcode-help"
             />
             <p id="friend-passcode-help" class="field-help">
-              4〜64文字。同じ合言葉を入力した相手と待ち合わせます。
+              12〜64文字。推測されにくい合言葉を相手だけに共有します。
             </p>
           </>
         ) : null}
@@ -250,7 +252,7 @@ function GameList() {
                 <strong>{game.players.white?.displayName ?? waitingLabel(game.mode)}</strong>
               </span>
               <span class="game-sub">
-                {modeLabel(game.mode)} / {game.status === "waiting" ? "募集中" : game.status === "active" ? `${String(game.moves.length)}手` : "終局"}
+                {modeLabel(game.mode)} / {game.status === "waiting" ? statusLabel(game) : game.status === "active" ? `${String(game.moves.length)}手` : "終局"}
               </span>
             </button>
           );
@@ -303,7 +305,8 @@ function BoardArea() {
               key={square.square}
               class={selected ? "board-square selected" : "board-square"}
               onClick={() => void handleSquareClick(square.square)}
-              disabled={busy.value || !myTurn}
+              disabled={busy.value}
+              aria-disabled={!myTurn}
               aria-label={label}
             >
               {square.piece ? (
@@ -701,9 +704,9 @@ function showError(error: unknown): void {
   notice.value = "処理に失敗しました。";
 }
 
-function statusLabel(game: GameSnapshot): string {
+function statusLabel(game: GameSnapshot | GameSummary): string {
   if (game.status === "waiting") {
-    return "募集中";
+    return "相手待ち";
   }
   if (game.status === "active") {
     return game.currentTurn === "black" ? "先手番" : "後手番";
@@ -724,7 +727,7 @@ function modeLabel(mode: GameMode): string {
 }
 
 function waitingLabel(mode: GameMode): string {
-  return mode === "cpu" ? "CPU" : "募集中";
+  return mode === "cpu" ? "CPU" : "相手待ち";
 }
 
 function createGameButtonLabel(): string {

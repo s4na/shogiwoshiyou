@@ -1,5 +1,6 @@
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
+import type { Context, Env as HonoEnv } from "hono";
 import { z } from "zod";
 
 import type { GamesResponse, SessionPayload } from "../shared/types";
@@ -41,7 +42,7 @@ const profileSchema = z.object({
 
 const createGameSchema = z.object({
   mode: z.enum(["cpu", "friend"]).default("cpu"),
-  passcode: z.string().trim().min(4).max(64).optional(),
+  passcode: z.string().trim().min(12).max(64).optional(),
 });
 
 const moveSchema = z.object({
@@ -73,13 +74,13 @@ app.get("/api/session", async (c) => {
   return c.json<SessionPayload>(await currentSession(c));
 });
 
-app.post("/api/auth/register", zValidator("json", registerSchema), async (c) => {
+app.post("/api/auth/register", zValidator("json", registerSchema, validationHook), async (c) => {
   ensureSameOrigin(c);
   const user = await register(c, c.req.valid("json"));
   return c.json<SessionPayload>({ user }, 201);
 });
 
-app.post("/api/auth/login", zValidator("json", loginSchema), async (c) => {
+app.post("/api/auth/login", zValidator("json", loginSchema, validationHook), async (c) => {
   ensureSameOrigin(c);
   const user = await login(c, c.req.valid("json"));
   return c.json<SessionPayload>({ user });
@@ -93,7 +94,7 @@ app.post("/api/auth/logout", async (c) => {
 
 app.use("/api/profile", authMiddleware());
 
-app.patch("/api/profile", zValidator("json", profileSchema), async (c) => {
+app.patch("/api/profile", zValidator("json", profileSchema, validationHook), async (c) => {
   ensureSameOrigin(c);
   const user = await updateProfile(c, c.get("user"), c.req.valid("json"));
   return c.json<SessionPayload>({ user });
@@ -107,7 +108,7 @@ app.get("/api/games", async (c) => {
   return c.json<GamesResponse>({ games });
 });
 
-app.post("/api/games", zValidator("json", createGameSchema), async (c) => {
+app.post("/api/games", zValidator("json", createGameSchema, validationHook), async (c) => {
   ensureSameOrigin(c);
   const input = c.req.valid("json");
   if (input.mode === "friend") {
@@ -129,7 +130,7 @@ app.get("/api/games/:id", async (c) => {
   return callGameRoom(c.env, gameId, c.get("user").id, "/snapshot");
 });
 
-app.post("/api/games/:id/moves", zValidator("json", moveSchema), async (c) => {
+app.post("/api/games/:id/moves", zValidator("json", moveSchema, validationHook), async (c) => {
   ensureSameOrigin(c);
   const gameId = validGameId(c.req.param("id"));
   return callGameRoom(c.env, gameId, c.get("user").id, "/move", {
@@ -138,7 +139,7 @@ app.post("/api/games/:id/moves", zValidator("json", moveSchema), async (c) => {
   });
 });
 
-app.post("/api/games/:id/resign", zValidator("json", resignSchema), async (c) => {
+app.post("/api/games/:id/resign", zValidator("json", resignSchema, validationHook), async (c) => {
   ensureSameOrigin(c);
   const gameId = validGameId(c.req.param("id"));
   return callGameRoom(c.env, gameId, c.get("user").id, "/resign", {
@@ -200,10 +201,22 @@ async function createOrJoinFriendGame(
   passcode: string,
 ): Promise<Response> {
   const gameId = friendGameId(await sha256Hex(passcode));
-  return callGameRoom(env, gameId, userId, "/friend", {
+  return callGameRoom(env, gameId, userId, "/friend-lobby", {
     method: "POST",
-    headers: { "x-join-mode": "friend" },
   });
+}
+
+function validationHook(
+  result: { success: true } | { success: false },
+  c: Context<HonoEnv, string>,
+): Response | undefined {
+  if (!result.success) {
+    return c.json(
+      { error: { code: "validation_error", message: "入力内容を確認してください。" } },
+      400,
+    );
+  }
+  return undefined;
 }
 
 function validGameId(value: string): string {

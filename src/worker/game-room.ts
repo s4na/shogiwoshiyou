@@ -48,6 +48,9 @@ export class GameRoom implements DurableObject {
       if (url.pathname === "/friend" && request.method === "POST") {
         return await this.createOrJoinFriendGame(userId);
       }
+      if (url.pathname === "/friend-lobby" && request.method === "POST") {
+        return await this.createOrJoinFriendLobby(userId);
+      }
       if (url.pathname === "/move" && request.method === "POST") {
         const body: Partial<MoveRequest> = await request.json();
         return await this.playMove(userId, body);
@@ -164,6 +167,19 @@ export class GameRoom implements DurableObject {
     return this.joinGame(userId, "friend");
   }
 
+  private async createOrJoinFriendLobby(userId: string): Promise<Response> {
+    const currentGameId = await this.state.storage.get<string>("friendGameId");
+    if (currentGameId) {
+      const currentGame = await this.loadGameById(currentGameId);
+      if (currentGame && currentGame.status !== "ended") {
+        return this.forwardToGame(currentGameId, userId, "/friend");
+      }
+    }
+    const nextGameId = crypto.randomUUID();
+    await this.state.storage.put("friendGameId", nextGameId);
+    return this.forwardToGame(nextGameId, userId, "/friend");
+  }
+
   private async playMove(userId: string, body: Partial<MoveRequest>): Promise<Response> {
     const requestId = validateRequestId(body.requestId);
     const usi = validateUsi(body.usi);
@@ -260,6 +276,10 @@ export class GameRoom implements DurableObject {
     if (!id) {
       return null;
     }
+    return this.loadGameById(id);
+  }
+
+  private async loadGameById(id: string): Promise<StoredGame | null> {
     const row = await this.env.DB.prepare(
       `SELECT g.*,
               COALESCE(MAX(e.seq), 0) AS last_event_seq
@@ -275,6 +295,18 @@ export class GameRoom implements DurableObject {
       return null;
     }
     return toStoredGame(row);
+  }
+
+  private forwardToGame(gameId: string, userId: string, path: string): Promise<Response> {
+    const id = this.env.GAME_ROOM.idFromName(gameId);
+    const stub = this.env.GAME_ROOM.get(id);
+    return stub.fetch(`https://game-room${path}`, {
+      method: "POST",
+      headers: {
+        "x-user-id": userId,
+        "x-join-mode": "friend",
+      },
+    });
   }
 
   private async requireGame(): Promise<StoredGame> {
