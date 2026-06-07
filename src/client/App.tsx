@@ -17,6 +17,8 @@ import {
 } from "./api";
 import {
   dropUsi,
+  legalDropDestinations,
+  legalMoveDestinations,
   moveNotationLabel,
   moveUsiTitle,
   myColor,
@@ -652,6 +654,13 @@ function ShogiBoard({
   const lastMoveUsi = game.moves[game.moves.length - 1]?.usi ?? "";
   const lastFrom = lastMoveUsi.slice(0, 2);
   const lastTo = lastMoveUsi.slice(2, 4);
+  const legalDestinations = new Set(
+    selectedSquare.value
+      ? legalMoveDestinations(game, selectedSquare.value)
+      : selectedHand.value
+        ? legalDropDestinations(game, selectedHand.value)
+        : [],
+  );
 
   return (
     <div ref={outerRef} style={{ width: "min(72svh, 100%)", maxWidth: 648, margin: "8px auto" }}>
@@ -696,9 +705,11 @@ function ShogiBoard({
               const selected = selectedSquare.value === square.square;
               const sq = square.square;
               const isLastMove = sq === lastFrom || sq === lastTo;
+              const isLegalDestination = legalDestinations.has(sq);
 
               let bgColor = "transparent";
               if (selected) bgColor = t.semantic.selected;
+              else if (isLegalDestination) bgColor = t.semantic.legalMove;
               else if (isLastMove) bgColor = t.semantic.lastMove;
 
               return (
@@ -708,7 +719,7 @@ function ShogiBoard({
                   onClick={() => void handleSquareClick(square.square)}
                   disabled={busy.value}
                   aria-disabled={!myTurn}
-                  aria-label={boardSquareLabel(square.square, square.piece, selected)}
+                  aria-label={boardSquareLabel(square.square, square.piece, selected, isLegalDestination)}
                   style={{
                     width: cellSize,
                     height: cellSize,
@@ -1046,13 +1057,17 @@ async function handleSquareClick(square: string): Promise<void> {
   const color = myColor(game, user.value.id);
   if (!color || game.status !== "active" || game.currentTurn !== color) return;
   if (selectedHand.value) { await submitMove(dropUsi(selectedHand.value, square)); return; }
+  const boardSquare = game.board.find((candidate) => candidate.square === square);
   if (!selectedSquare.value) {
-    const boardSquare = game.board.find((candidate) => candidate.square === square);
     if (boardSquare?.piece?.color === color) { selectedSquare.value = square; }
     return;
   }
   const from = selectedSquare.value;
   if (from === square) { selectedSquare.value = null; return; }
+  if (boardSquare?.piece?.color === color) {
+    selectedSquare.value = square;
+    return;
+  }
   const options = promotionMoveOptions(game, from, square);
   if (options.mustPromote) { await submitMove(options.promotedUsi); return; }
   if (options.canPromote) {
@@ -1196,10 +1211,11 @@ function createGameButtonLabel(): string {
   return gameMode.value === "cpu" ? "CPUと始める" : "合言葉で待ち合わせる";
 }
 
-function boardSquareLabel(square: string, piece: BoardPiece | null, selected: boolean): string {
+function boardSquareLabel(square: string, piece: BoardPiece | null, selected: boolean, legalDestination: boolean): string {
   const sel = selected ? " 選択中" : "";
-  if (!piece) return `${square} 空き${sel}`;
-  return `${square} ${piece.color === "black" ? "先手" : "後手"} ${piece.label}${sel}`;
+  const legal = legalDestination ? " 合法手" : "";
+  if (!piece) return `${square} 空き${sel}${legal}`;
+  return `${square} ${piece.color === "black" ? "先手" : "後手"} ${piece.label}${sel}${legal}`;
 }
 
 function connectionLabel(): string {

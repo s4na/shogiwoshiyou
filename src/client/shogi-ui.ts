@@ -1,3 +1,5 @@
+import { Position, Square, type Move, PieceType as TsshogiPieceType } from "tsshogi";
+
 import type {
   BoardPiece,
   BoardSquare,
@@ -30,6 +32,23 @@ export function moveNotationLabel(move: GameMove): string {
 
 export function moveUsiTitle(move: GameMove): string {
   return move.usi;
+}
+
+export function legalMoveDestinations(game: GameSnapshot, from: string): string[] {
+  const position = Position.newBySFEN(game.sfen);
+  const fromSquare = Square.newByUSI(from);
+  if (!position || !fromSquare) {
+    return [];
+  }
+  return legalDestinationsFrom(position, fromSquare);
+}
+
+export function legalDropDestinations(game: GameSnapshot, type: HandPieceType): string[] {
+  const position = Position.newBySFEN(game.sfen);
+  if (!position) {
+    return [];
+  }
+  return legalDestinationsFrom(position, type as TsshogiPieceType);
 }
 
 export function myColor(game: GameSnapshot, userId: string): PlayerColor | null {
@@ -84,4 +103,25 @@ export function promotionMoveOptions(
 
 function rankNumber(square: string): number {
   return RANKS.indexOf(square[1] ?? "") + 1;
+}
+
+function legalDestinationsFrom(position: Position, from: Square | TsshogiPieceType): string[] {
+  const destinations = new Set<string>();
+  for (const to of Square.all) {
+    addLegalDestination(position, destinations, position.createMove(from, to));
+  }
+  return [...destinations];
+}
+
+function addLegalDestination(position: Position, destinations: Set<string>, move: Move | null): void {
+  if (!move) {
+    return;
+  }
+  if (position.isValidMove(move)) {
+    destinations.add(move.to.usi);
+  }
+  const promoted = move.withPromote();
+  if (!promoted.equals(move) && position.isValidMove(promoted)) {
+    destinations.add(promoted.to.usi);
+  }
 }
