@@ -532,40 +532,10 @@ function renderTermsBlocks(lines: string[], t: Theme) {
 
     const listMatch = listItemPattern.exec(line);
     if (listMatch) {
-      const [, indentText = "", startText = "1"] = listMatch;
-      const indent = indentText.length;
-      const groupStartIndex = index;
-      const items = [];
-      while (index < lines.length) {
-        const itemMatch = listItemPattern.exec(lines[index] ?? "");
-        if (!itemMatch) break;
-        const [, itemIndent = "", itemNumber = "1", itemText = ""] = itemMatch;
-        if (itemIndent.length !== indent) break;
-        items.push({ index, number: Number(itemNumber), text: itemText });
-        index += 1;
-      }
-      index -= 1;
-      blocks.push(
-        <ol
-          key={`${String(groupStartIndex)}-list`}
-          start={Number(startText)}
-          style={{
-            color: t.text.secondary,
-            fontFamily: fG,
-            fontSize: 14,
-            lineHeight: 1.8,
-            margin: 0,
-            marginLeft: indent > 0 ? 22 : 0,
-            paddingLeft: 22,
-          }}
-        >
-          {items.map((item) => (
-            <li key={`${String(item.index)}-${String(item.number)}-${item.text}`} style={{ paddingLeft: 4 }}>
-              {item.text}
-            </li>
-          ))}
-        </ol>,
-      );
+      const [, indentText = ""] = listMatch;
+      const result = renderTermsList(lines, index, indentText.length, t);
+      blocks.push(result.element);
+      index = result.nextIndex - 1;
       continue;
     }
 
@@ -588,6 +558,74 @@ function renderTermsBlocks(lines: string[], t: Theme) {
     );
   }
   return blocks;
+}
+
+function renderTermsList(lines: string[], startIndex: number, indent: number, t: Theme) {
+  const listItemPattern = /^(\s*)(\d+)\.\s(.+)$/;
+  const firstMatch = listItemPattern.exec(lines[startIndex] ?? "");
+  const start = Number(firstMatch?.[2] ?? "1");
+  const items = [];
+  let index = startIndex;
+
+  while (index < lines.length) {
+    const itemMatch = listItemPattern.exec(lines[index] ?? "");
+    if (!itemMatch) break;
+    const [, itemIndent = "", itemNumber = "1", itemText = ""] = itemMatch;
+    if (itemIndent.length !== indent) break;
+
+    const itemIndex = index;
+    index += 1;
+    while (lines[index] === "") {
+      index += 1;
+    }
+
+    const children = [];
+    const nestedMatch = listItemPattern.exec(lines[index] ?? "");
+    const nestedIndent = nestedMatch?.[1]?.length ?? -1;
+    if (nestedIndent > indent) {
+      const nested = renderTermsList(lines, index, nestedIndent, t);
+      children.push(nested.element);
+      index = nested.nextIndex;
+      while (lines[index] === "") {
+        index += 1;
+      }
+    }
+
+    const nextMatch = listItemPattern.exec(lines[index] ?? "");
+    const nextIndent = nextMatch?.[1]?.length ?? -1;
+    items.push({ children, index: itemIndex, number: Number(itemNumber), text: itemText });
+    if (!nextMatch || nextIndent < indent) break;
+    if (nextIndent > indent) break;
+  }
+
+  return {
+    element: (
+      <ol
+        key={`${String(startIndex)}-list`}
+        start={start}
+        style={{
+          color: t.text.secondary,
+          fontFamily: fG,
+          fontSize: 14,
+          lineHeight: 1.8,
+          margin: 0,
+          paddingLeft: 22,
+        }}
+      >
+        {items.map((item) => (
+          <li key={`${String(item.index)}-${String(item.number)}-${item.text}`} style={{ paddingLeft: 4 }}>
+            {item.text}
+            {item.children.length > 0 ? (
+              <div style={{ marginTop: 6 }}>
+                {item.children}
+              </div>
+            ) : null}
+          </li>
+        ))}
+      </ol>
+    ),
+    nextIndex: index,
+  };
 }
 
 // ─── Play layout ──────────────────────────────────────

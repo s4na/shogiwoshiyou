@@ -5,7 +5,7 @@ import { currentTermsHash, TERMS_TEXT } from "../src/shared/terms";
 import type { Env } from "../src/worker/env";
 import type { StoredGame } from "../src/worker/shogi";
 
-const CURRENT_TERMS_HASH = "5635f8cdd13e27413d7a252d28881be518e1e2c3fa09a0519a79b7e61c8fec56";
+const CURRENT_TERMS_HASH = "3ffc4da40c4608f5731f7f6815d33c276fa05397d49ac65db3dc6317cb502862";
 const TERMS_PLACEHOLDERS = [
   "［運営者名］",
   "［アプリ名］",
