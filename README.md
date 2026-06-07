@@ -2,6 +2,7 @@
 
 Cloudflare Workers 上で動かす将棋対戦アプリ。
 
+- [デザインシステム](https://s4na.github.io/shogiwoshiyou/)
 - [ユーザー要望](docs/shogi-app/user-requests.md)
 - [要件定義](docs/shogi-app/requirements.md)
 - [設計書](docs/shogi-app/design.md)
