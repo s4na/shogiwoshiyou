@@ -4,7 +4,7 @@ import app, { GameRoom } from "../src/worker";
 import type { Env } from "../src/worker/env";
 import type { StoredGame } from "../src/worker/shogi";
 
-const CURRENT_TERMS_HASH = "98c77be36b143b80f60eb405682299085694fdcbda648f4cbef11eb1b20d750d";
+const CURRENT_TERMS_HASH = "0d9f425fb15da71567d8619b0024f52ee844e8ea5735d56b1ce0bdfe225856a2";
 
 describe("auth API", () => {
   it("rejects registration when the terms are not accepted", async () => {

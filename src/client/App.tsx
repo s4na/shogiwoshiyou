@@ -58,7 +58,7 @@ import type {
   PieceType,
   UserSummary,
 } from "../shared/types";
-import { currentTermsHash, TERMS_SECTIONS, TERMS_UPDATED_AT } from "../shared/terms";
+import { currentTermsHash, TERMS_TEXT } from "../shared/terms";
 
 // ─── Global state ─────────────────────────────────────
 const user = signal<UserSummary | null | undefined>(undefined);
@@ -456,6 +456,7 @@ function AuthScreen() {
 
 function TermsPage() {
   const t = useTheme();
+  const lines = TERMS_TEXT.split("\n");
   return (
     <main style={{ maxWidth: 860, margin: "0 auto", padding: "28px 24px 64px" }}>
       <article
@@ -468,24 +469,12 @@ function TermsPage() {
         }}
       >
         <div style={{ padding: "28px 28px 16px", borderBottom: `1px solid ${t.border.subtle}` }}>
-          <p style={{ color: t.text.tertiary, fontFamily: fG, fontSize: 12, marginBottom: 8 }}>
-            最終更新日: {TERMS_UPDATED_AT}
-          </p>
           <h2 style={{ color: t.text.primary, fontFamily: fS, fontSize: 28, fontWeight: 800 }}>
             利用規約
           </h2>
         </div>
-        <div style={{ display: "grid", gap: 22, padding: 28 }}>
-          {TERMS_SECTIONS.map((section) => (
-            <section key={section.title}>
-              <h3 style={{ color: t.text.primary, fontFamily: fS, fontSize: 17, fontWeight: 700, marginBottom: 8 }}>
-                {section.title}
-              </h3>
-              <p style={{ color: t.text.secondary, fontFamily: fG, fontSize: 14, lineHeight: 1.8 }}>
-                {section.body}
-              </p>
-            </section>
-          ))}
+        <div style={{ display: "grid", gap: 10, padding: 28 }}>
+          {lines.map((line, index) => renderTermsLine(line, index, t))}
           <div style={{ display: "flex", justifyContent: "flex-start", paddingTop: 8 }}>
             <Btn variant="secondary" size="md" onClick={() => { goHome(); }}>
               トップへ戻る
@@ -494,6 +483,47 @@ function TermsPage() {
         </div>
       </article>
     </main>
+  );
+}
+
+function renderTermsLine(line: string, index: number, t: Theme) {
+  const key = `${String(index)}-${line}`;
+  if (line === "" || line === "---" || line === "# 利用規約") {
+    return <div key={key} style={{ height: line === "" ? 6 : 1 }} />;
+  }
+  if (line.startsWith("## ")) {
+    return (
+      <h3
+        key={key}
+        style={{
+          color: t.text.primary,
+          fontFamily: fS,
+          fontSize: 17,
+          fontWeight: 700,
+          lineHeight: 1.6,
+          marginTop: index === 0 ? 0 : 10,
+        }}
+      >
+        {line.slice(3)}
+      </h3>
+    );
+  }
+  const trimmed = line.trimStart();
+  const indent = line.length - trimmed.length;
+  return (
+    <p
+      key={key}
+      style={{
+        color: t.text.secondary,
+        fontFamily: fG,
+        fontSize: 14,
+        lineHeight: 1.8,
+        marginLeft: indent > 0 ? 18 : 0,
+        whiteSpace: "pre-wrap",
+      }}
+    >
+      {trimmed}
+    </p>
   );
 }
 
