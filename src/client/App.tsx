@@ -782,7 +782,11 @@ function ModeSelectScreen() {
         </p>
       </section>
 
-      <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 16 }}>
+      <section
+        role="radiogroup"
+        aria-label="対戦モード"
+        style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 16 }}
+      >
         <ModeCard
           mode="cpu"
           title="CPU対戦"
@@ -835,6 +839,8 @@ function ModeCard({
       <input type="hidden" name="mode" value={mode} />
       <div style={{ display: "grid", gap: 12 }}>
         <label
+          role="radio"
+          aria-checked={selected}
           style={{
             width: "100%",
             display: "flex",
