@@ -761,23 +761,25 @@ function ModeSelectScreen() {
           display: "grid",
           gap: 8,
           borderBottom: `1px solid ${t.border.subtle}`,
-          paddingBottom: 18,
+          paddingBottom: 20,
         }}
       >
         <p
           style={{
             fontFamily: fG,
-            fontSize: 12,
+            fontSize: 13,
             fontWeight: 700,
+            letterSpacing: "0.06em",
+            textTransform: "uppercase",
             color: t.accent.gold,
           }}
         >
           モード選択
         </p>
-        <h2 style={{ fontFamily: fS, fontSize: "clamp(1.6rem, 1.25rem + 1.4vw, 2.4rem)", color: t.text.primary }}>
+        <h2 style={{ fontFamily: fS, fontSize: "clamp(1.5rem, 1.2rem + 1vw, 2rem)", fontWeight: 700, color: t.text.primary }}>
           今日はどう指しますか
         </h2>
-        <p style={{ maxWidth: 620, fontFamily: fG, fontSize: 14, lineHeight: 1.8, color: t.text.secondary }}>
+        <p style={{ maxWidth: 560, fontFamily: fG, fontSize: 14, lineHeight: 1.8, color: t.text.secondary }}>
           新しく始めるか、途中または最近の対局に戻るかを選んでから盤面へ進みます。
         </p>
       </section>
@@ -823,16 +825,18 @@ function ModeCard({
   const selected = gameMode.value === mode;
   return (
     <div
+      onClick={() => { gameMode.value = mode; }}
       style={{
-        minHeight: 260,
         display: "grid",
         alignContent: "space-between",
-        gap: 18,
+        gap: 16,
         padding: 20,
         borderRadius: R.lg,
-        border: `1px solid ${selected ? accent : t.border.default}`,
+        border: `${selected ? "2px" : "1px"} solid ${selected ? accent : t.border.default}`,
         backgroundColor: selected ? t.bg.elevated : t.bg.secondary,
-        boxShadow: selected ? t.shadow.md : t.shadow.sm,
+        boxShadow: selected ? `${t.shadow.md}, 0 0 0 3px ${accent}22` : t.shadow.sm,
+        cursor: "pointer",
+        transition: `border-color ${MOTION.normal}, box-shadow ${MOTION.normal}, background-color ${MOTION.normal}`,
       }}
     >
       <div style={{ display: "grid", gap: 12 }}>
@@ -860,21 +864,23 @@ function ModeCard({
               onChange={() => { gameMode.value = mode; }}
               style={{ accentColor: accent, flexShrink: 0 }}
             />
-            <span style={{ fontFamily: fS, fontSize: 22, fontWeight: 800 }}>{title}</span>
+            <span style={{ fontFamily: fS, fontSize: 20, fontWeight: 800 }}>{title}</span>
           </span>
           <span
             aria-hidden="true"
             style={{
-              width: 34,
-              height: 34,
+              width: 36,
+              height: 36,
               display: "grid",
               placeItems: "center",
               borderRadius: R.full,
-              border: `1px solid ${selected ? accent : t.border.default}`,
+              border: `${selected ? "2px" : "1px"} solid ${selected ? accent : t.border.default}`,
               color: selected ? accent : t.text.tertiary,
               fontFamily: fG,
+              fontSize: 15,
               fontWeight: 900,
               flexShrink: 0,
+              transition: `color ${MOTION.normal}, border-color ${MOTION.normal}`,
             }}
           >
             {mode === "cpu" ? "歩" : "対"}
@@ -897,6 +903,7 @@ function ModeCard({
             autoComplete="off"
             aria-describedby="friend-passcode-help"
             onFocus={() => { gameMode.value = "friend"; }}
+            onClick={(e) => { e.stopPropagation(); }}
           />
         </FieldGroup>
       ) : (
@@ -910,7 +917,8 @@ function ModeCard({
         size="lg"
         full
         type={selected ? "submit" : "button"}
-        disabled={busy.value || !selected}
+        disabled={busy.value}
+        onClick={() => { if (!selected) { gameMode.value = mode; } }}
       >
         {mode === "cpu" ? "CPUと始める" : "合言葉で待ち合わせる"}
       </Btn>
@@ -930,7 +938,7 @@ function ResumeGamesPanel() {
         ) : (
           <GameList onSelect={(gameId) => void selectGame(gameId)} />
         )}
-        <div style={{ display: "flex", justifyContent: "flex-start", paddingTop: 4 }}>
+        <div style={{ display: "flex", justifyContent: "flex-end", paddingTop: 4 }}>
           <Btn variant="secondary" size="sm" onClick={() => void refreshGames()} disabled={busy.value}>
             対局一覧を更新
           </Btn>
@@ -961,8 +969,8 @@ function GameListPanel() {
     <Card>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
         <h2 style={{ fontFamily: fS, fontSize: 16, fontWeight: 700, color: t.text.primary }}>戦闘モード</h2>
-        <Btn variant="ghost" size="sm" onClick={() => { returnToModeSelect(); }} disabled={busy.value}>
-          モード選択へ戻る
+        <Btn variant="secondary" size="sm" onClick={() => { returnToModeSelect(); }} disabled={busy.value}>
+          ← モード選択へ
         </Btn>
       </div>
 

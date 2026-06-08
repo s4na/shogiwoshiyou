@@ -855,14 +855,14 @@ function MockModeCard({ mode, selected }: { mode: "cpu"|"friend"; selected?: boo
   const t = useTheme();
   const accent = mode==="cpu" ? t.accent.gold : t.accent.jade;
   return (
-    <div style={{ minHeight: 210, display: "grid", alignContent: "space-between", gap: 14, padding: 18, borderRadius: R.lg, border: `1px solid ${selected ? accent : t.border.default}`, backgroundColor: selected ? t.bg.elevated : t.bg.secondary, boxShadow: selected ? t.shadow.md : t.shadow.sm }}>
+    <div style={{ display: "grid", alignContent: "space-between", gap: 16, padding: 18, borderRadius: R.lg, border: `${selected ? "2px" : "1px"} solid ${selected ? accent : t.border.default}`, backgroundColor: selected ? t.bg.elevated : t.bg.secondary, boxShadow: selected ? `${t.shadow.md}, 0 0 0 3px ${accent}22` : t.shadow.sm }}>
       <div style={{ display: "grid", gap: 10 }}>
         <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, color: t.text.primary, cursor: "pointer" }}>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
             <input type="radio" readOnly checked={Boolean(selected)} name="mock-mode" style={{ accentColor: accent }} />
             <span style={{ fontFamily: fS, fontSize: 20, fontWeight: 800 }}>{mode==="cpu" ? "CPU対戦" : "友達対戦"}</span>
           </span>
-          <span aria-hidden="true" style={{ width: 32, height: 32, display: "grid", placeItems: "center", borderRadius: R.full, border: `1px solid ${selected ? accent : t.border.default}`, color: selected ? accent : t.text.tertiary, fontFamily: fG, fontWeight: 900 }}>
+          <span aria-hidden="true" style={{ width: 36, height: 36, display: "grid", placeItems: "center", borderRadius: R.full, border: `${selected ? "2px" : "1px"} solid ${selected ? accent : t.border.default}`, color: selected ? accent : t.text.tertiary, fontFamily: fG, fontSize: 15, fontWeight: 900 }}>
             {mode==="cpu" ? "歩" : "対"}
           </span>
         </label>
@@ -879,7 +879,7 @@ function MockModeCard({ mode, selected }: { mode: "cpu"|"friend"; selected?: boo
       ) : (
         <p style={{ fontFamily: fG, fontSize: 12, lineHeight: 1.7, color: t.text.tertiary }}>作成するとそのまま対局画面へ進みます。</p>
       )}
-      <Btn variant={selected ? "primary" : "secondary"} size="md" full disabled={!selected}>
+      <Btn variant={selected ? "primary" : "secondary"} size="md" full>
         {mode==="cpu" ? "CPUと始める" : "合言葉で待ち合わせる"}
       </Btn>
     </div>
@@ -894,9 +894,9 @@ function MockModeSelectScreen() {
   ];
   return (
     <div style={{ backgroundColor: t.bg.primary, padding: "22px 24px 34px", display: "grid", gap: 18 }}>
-      <section style={{ display: "grid", gap: 6, borderBottom: `1px solid ${t.border.subtle}`, paddingBottom: 14 }}>
-        <p style={{ fontFamily: fG, fontSize: 11, fontWeight: 700, color: t.accent.gold }}>モード選択</p>
-        <h2 style={{ fontFamily: fS, fontSize: 28, fontWeight: 800, color: t.text.primary }}>今日はどう指しますか</h2>
+      <section style={{ display: "grid", gap: 6, borderBottom: `1px solid ${t.border.subtle}`, paddingBottom: 20 }}>
+        <p style={{ fontFamily: fG, fontSize: 13, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: t.accent.gold }}>モード選択</p>
+        <h2 style={{ fontFamily: fS, fontSize: 24, fontWeight: 700, color: t.text.primary }}>今日はどう指しますか</h2>
         <p style={{ fontFamily: fG, fontSize: 13, lineHeight: 1.7, color: t.text.secondary }}>新しく始めるか、途中または最近の対局に戻るかを選んでから盤面へ進みます。</p>
       </section>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
@@ -918,7 +918,9 @@ function MockModeSelectScreen() {
               </span>
             </div>
           ))}
-          <Btn variant="secondary" size="sm">対局一覧を更新</Btn>
+          <div style={{ display: "flex", justifyContent: "flex-end" }}>
+            <Btn variant="secondary" size="sm">対局一覧を更新</Btn>
+          </div>
         </div>
       </div>
     </div>
