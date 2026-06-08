@@ -890,7 +890,8 @@ function ModeCard({
           <Input
             id="friend-passcode"
             name="passcode"
-            required
+            required={selected}
+            disabled={!selected}
             minLength={12}
             maxLength={64}
             autoComplete="off"
