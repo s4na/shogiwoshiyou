@@ -87,6 +87,7 @@ const busy = signal(false);
 const connection = signal<"idle" | "connecting" | "live" | "reconnecting" | "polling">("idle");
 const authMode = signal<"register" | "login">("register");
 const gameMode = signal<GameMode>("cpu");
+const appStage = signal<"mode-select" | "battle">("mode-select");
 const currentPage = signal<"home" | "terms">(pageForPath(window.location.pathname));
 
 const signedIn = computed(() => user.value !== null && user.value !== undefined);
@@ -186,6 +187,8 @@ export function App() {
               <AuthScreen />
             ) : termsAgreementRequired.value ? (
               <TermsAgreementScreen />
+            ) : appStage.value === "mode-select" ? (
+              <ModeSelectScreen />
             ) : (
               <PlayScreen />
             )}
@@ -740,17 +743,214 @@ function renderTermsList(lines: string[], startIndex: number, indent: number, t:
   };
 }
 
+// ─── Mode selection ───────────────────────────────────
+function ModeSelectScreen() {
+  const t = useTheme();
+  return (
+    <main
+      style={{
+        width: "min(1120px, 100%)",
+        margin: "0 auto",
+        padding: "28px 24px 64px",
+        display: "grid",
+        gap: 24,
+      }}
+    >
+      <section
+        style={{
+          display: "grid",
+          gap: 8,
+          borderBottom: `1px solid ${t.border.subtle}`,
+          paddingBottom: 18,
+        }}
+      >
+        <p
+          style={{
+            fontFamily: fG,
+            fontSize: 12,
+            fontWeight: 700,
+            color: t.accent.gold,
+          }}
+        >
+          モード選択
+        </p>
+        <h2 style={{ fontFamily: fS, fontSize: "clamp(1.6rem, 1.25rem + 1.4vw, 2.4rem)", color: t.text.primary }}>
+          今日はどう指しますか
+        </h2>
+        <p style={{ maxWidth: 620, fontFamily: fG, fontSize: 14, lineHeight: 1.8, color: t.text.secondary }}>
+          新しく始めるか、途中または最近の対局に戻るかを選んでから盤面へ進みます。
+        </p>
+      </section>
+
+      <form
+        onSubmit={(event) => void submitCreateGame(event)}
+        aria-label="対戦モード"
+        style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 16 }}
+      >
+        <ModeCard
+          mode="cpu"
+          title="CPU対戦"
+          description="すぐに一局始めます。相手待ちなしで、ログイン後の肩慣らしに向いています。"
+          accent={t.accent.gold}
+        />
+        <ModeCard
+          mode="friend"
+          title="友達対戦"
+          description="合言葉で待ち合わせます。同じ合言葉を入れた相手が参加すると対局が始まります。"
+          accent={t.accent.jade}
+        />
+      </form>
+
+      <section>
+        <ResumeGamesPanel />
+      </section>
+    </main>
+  );
+}
+
+function ModeCard({
+  mode,
+  title,
+  description,
+  accent,
+}: {
+  mode: GameMode;
+  title: string;
+  description: string;
+  accent: string;
+}) {
+  const t = useTheme();
+  const selected = gameMode.value === mode;
+  return (
+    <div
+      style={{
+        minHeight: 260,
+        display: "grid",
+        alignContent: "space-between",
+        gap: 18,
+        padding: 20,
+        borderRadius: R.lg,
+        border: `1px solid ${selected ? accent : t.border.default}`,
+        backgroundColor: selected ? t.bg.elevated : t.bg.secondary,
+        boxShadow: selected ? t.shadow.md : t.shadow.sm,
+      }}
+    >
+      <div style={{ display: "grid", gap: 12 }}>
+        <label
+          style={{
+            width: "100%",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+            padding: 0,
+            background: "transparent",
+            border: "none",
+            color: t.text.primary,
+            textAlign: "left",
+            cursor: "pointer",
+          }}
+        >
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+            <input
+              type="radio"
+              name="mode"
+              value={mode}
+              checked={selected}
+              onChange={() => { gameMode.value = mode; }}
+              style={{ accentColor: accent, flexShrink: 0 }}
+            />
+            <span style={{ fontFamily: fS, fontSize: 22, fontWeight: 800 }}>{title}</span>
+          </span>
+          <span
+            aria-hidden="true"
+            style={{
+              width: 34,
+              height: 34,
+              display: "grid",
+              placeItems: "center",
+              borderRadius: R.full,
+              border: `1px solid ${selected ? accent : t.border.default}`,
+              color: selected ? accent : t.text.tertiary,
+              fontFamily: fG,
+              fontWeight: 900,
+              flexShrink: 0,
+            }}
+          >
+            {mode === "cpu" ? "歩" : "対"}
+          </span>
+        </label>
+        <p style={{ fontFamily: fG, fontSize: 14, lineHeight: 1.8, color: t.text.secondary }}>
+          {description}
+        </p>
+      </div>
+
+      {mode === "friend" ? (
+        <FieldGroup id="friend-passcode" label="合言葉" helpId="friend-passcode-help" help="12〜64文字。推測されにくい合言葉を相手だけに共有します。">
+          <Input
+            id="friend-passcode"
+            name="passcode"
+            required={selected}
+            disabled={!selected}
+            minLength={12}
+            maxLength={64}
+            autoComplete="off"
+            aria-describedby="friend-passcode-help"
+            onFocus={() => { gameMode.value = "friend"; }}
+          />
+        </FieldGroup>
+      ) : (
+        <p style={{ fontFamily: fG, fontSize: 12, lineHeight: 1.7, color: t.text.tertiary }}>
+          作成するとそのまま対局画面へ進みます。
+        </p>
+      )}
+
+      <Btn
+        variant={selected ? "primary" : "secondary"}
+        size="lg"
+        full
+        type={selected ? "submit" : "button"}
+        disabled={busy.value || !selected}
+      >
+        {mode === "cpu" ? "CPUと始める" : "合言葉で待ち合わせる"}
+      </Btn>
+    </div>
+  );
+}
+
+function ResumeGamesPanel() {
+  const t = useTheme();
+  return (
+    <Card title="進行中・最近の対局" p={16}>
+      <div style={{ display: "grid", gap: 10 }}>
+        {games.value.length === 0 ? (
+          <p style={{ fontFamily: fG, fontSize: 13, color: t.text.tertiary, textAlign: "center", padding: "16px 0" }}>
+            まだ対局はありません
+          </p>
+        ) : (
+          <GameList onSelect={(gameId) => void selectGame(gameId)} />
+        )}
+        <div style={{ display: "flex", justifyContent: "flex-start", paddingTop: 4 }}>
+          <Btn variant="secondary" size="sm" onClick={() => void refreshGames()} disabled={busy.value}>
+            対局一覧を更新
+          </Btn>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
 // ─── Play layout ──────────────────────────────────────
 function PlayScreen() {
   return (
-    <div
+    <main
       className="play-layout"
       style={{ maxWidth: 1380, margin: "0 auto", padding: "20px 24px 60px", alignItems: "start" }}
     >
       <div className="side-order-1"><GameListPanel /></div>
       <div className="board-order"><BoardPanel /></div>
       <div className="history-order"><HistoryPanel /></div>
-    </div>
+    </main>
   );
 }
 
@@ -760,122 +960,77 @@ function GameListPanel() {
   return (
     <Card>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-        <h2 style={{ fontFamily: fS, fontSize: 16, fontWeight: 700, color: t.text.primary }}>対局</h2>
-        <Btn variant="secondary" size="sm" onClick={() => void refreshGames()} disabled={busy.value}>
-          更新
+        <h2 style={{ fontFamily: fS, fontSize: 16, fontWeight: 700, color: t.text.primary }}>戦闘モード</h2>
+        <Btn variant="ghost" size="sm" onClick={() => { returnToModeSelect(); }} disabled={busy.value}>
+          モード選択へ戻る
         </Btn>
       </div>
 
-      {/* Create game form */}
-      <form onSubmit={(event) => void submitCreateGame(event)} style={{ display: "grid", gap: 12, marginBottom: 16 }}>
-        <div
-          style={{
-            borderRadius: R.md,
-            border: `1px solid ${t.border.default}`,
-            padding: "12px",
-            display: "grid",
-            gap: 8,
-          }}
-        >
-          <p style={{ fontFamily: fG, fontSize: 11, fontWeight: 600, color: t.text.tertiary, letterSpacing: "0.05em" }}>
-            対戦モード
-          </p>
-          {(["cpu", "friend"] as const).map((mode) => (
-            <label
-              key={mode}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                fontFamily: fG,
-                fontSize: 13,
-                fontWeight: gameMode.value === mode ? 600 : 400,
-                color: t.text.primary,
-                cursor: "pointer",
-              }}
-            >
-              <input
-                type="radio"
-                name="mode"
-                value={mode}
-                checked={gameMode.value === mode}
-                onChange={() => { gameMode.value = mode; }}
-              />
-              {mode === "cpu" ? "CPU対戦" : "友達対戦"}
-            </label>
-          ))}
-        </div>
-
-        {gameMode.value === "friend" && (
-          <FieldGroup id="friend-passcode" label="合言葉" helpId="friend-passcode-help" help="12〜64文字。推測されにくい合言葉を相手だけに共有します。">
-            <Input
-              id="friend-passcode"
-              name="passcode"
-              required
-              minLength={12}
-              maxLength={64}
-              autoComplete="off"
-              aria-describedby="friend-passcode-help"
-            />
-          </FieldGroup>
-        )}
-
-        <Btn variant="primary" size="md" full type="submit" disabled={busy.value}>
-          {createGameButtonLabel()}
+      <div style={{ display: "grid", gap: 10, marginBottom: 14 }}>
+        <Btn variant="secondary" size="sm" onClick={() => void refreshGames()} disabled={busy.value}>
+          対局一覧を更新
         </Btn>
-      </form>
+      </div>
 
-      {/* Game list */}
       <div style={{ display: "grid", gap: 6 }}>
         {games.value.length === 0 && (
           <p style={{ fontFamily: fG, fontSize: 13, color: t.text.tertiary, textAlign: "center", padding: "16px 0" }}>
-            対局なし
+            まだ対局はありません
           </p>
         )}
-        {games.value.map((game) => {
-          const active = activeGame.value?.id === game.id;
-          return (
-            <button
-              type="button"
-              key={game.id}
-              onClick={() => void selectGame(game.id)}
-              disabled={busy.value}
-              style={{
-                display: "grid",
-                gap: 4,
-                width: "100%",
-                minHeight: 60,
-                padding: "10px 12px",
-                textAlign: "left",
-                backgroundColor: active ? t.accent.jadeDim : t.bg.tertiary,
-                border: `1px solid ${active ? t.accent.jade : t.border.subtle}`,
-                borderRadius: R.md,
-                cursor: busy.value ? "not-allowed" : "pointer",
-                transition: `all ${MOTION.normal}`,
-              }}
-            >
-              <span style={{ display: "flex", gap: 6, alignItems: "center", fontFamily: fG, fontSize: 13 }}>
-                <strong style={{ color: t.text.primary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {game.players.black.displayName}
-                </strong>
-                <span style={{ color: t.text.tertiary, flexShrink: 0 }}>対</span>
-                <strong style={{ color: t.text.primary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {game.players.white?.displayName ?? waitingLabel(game.mode)}
-                </strong>
-              </span>
-              <span style={{ fontFamily: fG, fontSize: 11, color: t.text.tertiary }}>
-                {modeLabel(game.mode)} /{" "}
-                {game.status === "waiting"
-                  ? statusLabel(game)
-                  : game.status === "active"
-                    ? `${String(game.moves.length)}手`
-                    : "終局"}
-              </span>
-            </button>
-          );
-        })}
+        <GameList onSelect={(gameId) => void selectGame(gameId)} />
       </div>
     </Card>
+  );
+}
+
+function GameList({ onSelect }: { onSelect: (gameId: string) => void }) {
+  const t = useTheme();
+  return (
+    <>
+      {games.value.map((game) => {
+        const active = activeGame.value?.id === game.id;
+        return (
+          <button
+            type="button"
+            key={game.id}
+            onClick={() => { onSelect(game.id); }}
+            disabled={busy.value}
+            style={{
+              display: "grid",
+              gap: 4,
+              width: "100%",
+              minHeight: 60,
+              padding: "10px 12px",
+              textAlign: "left",
+              backgroundColor: active ? t.accent.jadeDim : t.bg.tertiary,
+              border: `1px solid ${active ? t.accent.jade : t.border.subtle}`,
+              borderRadius: R.md,
+              cursor: busy.value ? "not-allowed" : "pointer",
+              transition: `all ${MOTION.normal}`,
+            }}
+          >
+            <span style={{ display: "flex", gap: 6, alignItems: "center", fontFamily: fG, fontSize: 13 }}>
+              <strong style={{ color: t.text.primary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {game.players.black.displayName}
+              </strong>
+              <span style={{ color: t.text.tertiary, flexShrink: 0 }}>対</span>
+              <strong style={{ color: t.text.primary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {game.players.white?.displayName ?? waitingLabel(game.mode)}
+              </strong>
+            </span>
+            <span style={{ fontFamily: fG, fontSize: 11, color: t.text.tertiary }}>
+              {modeLabel(game.mode)} /{" "}
+              {game.status === "waiting"
+                ? statusLabel(game)
+                : game.status === "active"
+                  ? `${String(game.moves.length)}手`
+                  : "終局"}
+            </span>
+          </button>
+        );
+      })}
+    </>
   );
 }
 
@@ -1395,6 +1550,7 @@ async function bootstrap(): Promise<void> {
     user.value = null;
     termsAgreementRequired.value = false;
     sessionTermsHash.value = "";
+    appStage.value = "mode-select";
   }
 }
 
@@ -1428,6 +1584,7 @@ async function submitGuestLogin(event: SubmitEvent): Promise<void> {
     });
     applySession(session);
     await refreshGames();
+    appStage.value = "mode-select";
   });
 }
 
@@ -1443,6 +1600,7 @@ async function submitTermsAgreement(event: SubmitEvent): Promise<void> {
     const session = await acceptTermsAgreement(input);
     applySession(session);
     await refreshGames();
+    returnToModeSelect();
   });
 }
 
@@ -1473,14 +1631,19 @@ async function handleLogout(): Promise<void> {
     events.value = [];
     analysisMode.value = false;
     analysisSnapshot.value = null;
+    appStage.value = "mode-select";
     closeRealtime();
   });
 }
 
 function applySession(session: SessionPayload): void {
+  const wasSignedIn = Boolean(user.value);
   user.value = session.user;
   termsAgreementRequired.value = session.termsAgreementRequired;
   sessionTermsHash.value = session.termsHash;
+  if (!session.user || session.termsAgreementRequired || !wasSignedIn) {
+    appStage.value = "mode-select";
+  }
 }
 
 async function refreshGames(): Promise<void> {
@@ -1496,10 +1659,12 @@ async function submitCreateGame(event: SubmitEvent): Promise<void> {
   const passcodeEntry = form.get("passcode");
   const passcode = typeof passcodeEntry === "string" ? passcodeEntry.trim() : "";
   await withBusy(async () => {
+    gameMode.value = mode;
     const response = await createGame({ mode, ...(mode === "friend" ? { passcode } : {}) });
     applyGameSnapshot(response.game);
-    await refreshGames();
+    appStage.value = "battle";
     connectRealtime(response.game.id);
+    await refreshGames();
   });
 }
 
@@ -1514,9 +1679,24 @@ async function selectGame(gameId: string): Promise<void> {
     analysisSnapshot.value = null;
     analysisSelectedSquare.value = null;
     analysisSelectedHand.value = null;
-    await refreshEvents();
+    appStage.value = "battle";
     connectRealtime(gameId);
+    await refreshEvents();
   });
+}
+
+function returnToModeSelect(): void {
+  appStage.value = "mode-select";
+  activeGame.value = null;
+  events.value = [];
+  selectedSquare.value = null;
+  selectedHand.value = null;
+  promotionChoice.value = null;
+  analysisMode.value = false;
+  analysisSnapshot.value = null;
+  analysisSelectedSquare.value = null;
+  analysisSelectedHand.value = null;
+  closeRealtime();
 }
 
 async function handleSquareClick(square: string): Promise<void> {
@@ -1869,10 +2049,6 @@ function modeLabel(mode: GameMode): string {
 
 function waitingLabel(mode: GameMode): string {
   return mode === "cpu" ? "CPU" : "相手待ち";
-}
-
-function createGameButtonLabel(): string {
-  return gameMode.value === "cpu" ? "CPUと始める" : "合言葉で待ち合わせる";
 }
 
 function boardSquareLabel(square: string, piece: BoardPiece | null, selected: boolean, legalDestination: boolean): string {
