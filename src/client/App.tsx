@@ -923,7 +923,7 @@ function ResumeGamesPanel() {
         )}
         <div style={{ display: "flex", justifyContent: "flex-start", paddingTop: 4 }}>
           <Btn variant="secondary" size="sm" onClick={() => void refreshGames()} disabled={busy.value}>
-            一覧を更新
+            対局一覧を更新
           </Btn>
         </div>
       </div>
@@ -1653,9 +1653,9 @@ async function submitCreateGame(event: SubmitEvent): Promise<void> {
     gameMode.value = mode;
     const response = await createGame({ mode, ...(mode === "friend" ? { passcode } : {}) });
     applyGameSnapshot(response.game);
-    await refreshGames();
     appStage.value = "battle";
     connectRealtime(response.game.id);
+    await refreshGames();
   });
 }
 
@@ -1670,9 +1670,9 @@ async function selectGame(gameId: string): Promise<void> {
     analysisSnapshot.value = null;
     analysisSelectedSquare.value = null;
     analysisSelectedHand.value = null;
-    await refreshEvents();
     appStage.value = "battle";
     connectRealtime(gameId);
+    await refreshEvents();
   });
 }
 
