@@ -1045,9 +1045,9 @@ function ScreenFlows() {
               </FieldGroup>
               <div style={{ display: "grid", gap: 8 }}>
                 <div style={{ display: "flex", alignItems: "flex-start", gap: 10, minHeight: 48, paddingTop: 6 }}>
-                  <input type="checkbox" style={{ width: 18, height: 18, marginTop: 7, accentColor: t.accent.gold, flexShrink: 0 }} />
+                  <input id="sf-terms" type="checkbox" style={{ width: 18, height: 18, marginTop: 7, accentColor: t.accent.gold, flexShrink: 0 }} />
                   <div style={{ color: t.text.secondary, fontFamily: fG, fontSize: 13, lineHeight: 1.6, padding: "4px 0 10px" }}>
-                    <div>利用規約に同意します。</div>
+                    <label for="sf-terms">利用規約に同意します。</label>
                     <div><a href="/terms" style={{ color: t.accent.gold, fontWeight: 700 }}>利用規約を読む</a></div>
                   </div>
                 </div>
