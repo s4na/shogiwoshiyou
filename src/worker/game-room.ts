@@ -51,6 +51,7 @@ const PIECE_TYPES = new Set([
 ]);
 const HAND_PIECE_TYPES = new Set(["pawn", "lance", "knight", "silver", "gold", "bishop", "rook"]);
 const COLORS = new Set(["black", "white"]);
+const RANK_CODES = "abcdefghi";
 
 type MoveRequest = {
   usi: string;
@@ -802,34 +803,34 @@ function validateAnalysisBoard(value: unknown): BoardSquare[] {
   }
   const seen = new Set<string>();
   const squares: unknown[] = value;
-  return squares.map((square) => {
+  const normalized = new Map<string, BoardSquare>();
+  for (const square of squares) {
     if (!isRecord(square)) {
       throw new RoomError(400, "bad_analysis_board", "感想戦の盤面が不正です。");
     }
-    const file = square.file;
-    const rank = square.rank;
+    const expected = squareFromUsi(typeof square.square === "string" ? square.square : "");
     if (
       typeof square.square !== "string" ||
       !/^[1-9][a-i]$/.test(square.square) ||
-      typeof file !== "number" ||
-      !Number.isInteger(file) ||
-      typeof rank !== "number" ||
-      !Number.isInteger(rank) ||
-      file < 1 ||
-      file > 9 ||
-      rank < 1 ||
-      rank > 9 ||
+      !expected ||
       seen.has(square.square)
     ) {
       throw new RoomError(400, "bad_analysis_board", "感想戦の盤面が不正です。");
     }
     seen.add(square.square);
-    return {
+    normalized.set(square.square, {
       square: square.square,
-      file,
-      rank,
+      file: expected.file,
+      rank: expected.rank,
       piece: square.piece === null ? null : validateBoardPiece(square.piece),
-    };
+    });
+  }
+  return orderedSquareIds().map((square) => {
+    const normalizedSquare = normalized.get(square);
+    if (!normalizedSquare) {
+      throw new RoomError(400, "bad_analysis_board", "感想戦の盤面が不正です。");
+    }
+    return normalizedSquare;
   });
 }
 
@@ -896,4 +897,23 @@ function validateHandPieces(value: unknown[]): HandPiece[] {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+function squareFromUsi(square: string): { file: number; rank: number } | null {
+  const file = Number(square[0]);
+  const rank = RANK_CODES.indexOf(square[1] ?? "") + 1;
+  if (!Number.isInteger(file) || file < 1 || file > 9 || rank < 1 || rank > 9) {
+    return null;
+  }
+  return { file, rank };
+}
+
+function orderedSquareIds(): string[] {
+  const squares: string[] = [];
+  for (const rank of RANK_CODES) {
+    for (let file = 9; file >= 1; file -= 1) {
+      squares.push(`${String(file)}${rank}`);
+    }
+  }
+  return squares;
 }

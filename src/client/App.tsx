@@ -1635,6 +1635,10 @@ async function handleAnalysisSquareClick(square: string): Promise<void> {
     analysisSelectedSquare.value = null;
     return;
   }
+  if (target.piece) {
+    analysisSelectedSquare.value = null;
+    return;
+  }
   const moving = source.piece;
   source.piece = null;
   target.piece = moving;

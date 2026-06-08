@@ -125,7 +125,6 @@ export async function updateAnalysis(
       method: "POST",
       body: JSON.stringify(input),
     },
-    1,
   );
 }
 

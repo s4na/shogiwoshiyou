@@ -1017,6 +1017,75 @@ describe("GameRoom moves", () => {
     expect(badHandsBody.error?.code).toBe("bad_analysis_hands");
   });
 
+  it("normalizes post-game analysis board order and square coordinates", async () => {
+    const game = storedGame({
+      mode: "friend",
+      whiteUserId: "white-user",
+      status: "ended",
+      winnerUserId: "black-user",
+      endReason: "resign",
+      moves: ["7g7f"],
+      sfen: "lnsgkgsnl/1r5b1/ppppppppp/9/9/2P6/PP1PPPPPP/1B5R1/LNSGKGSNL w - 1",
+      currentTurn: "white",
+      version: 2,
+      lastEventSeq: 3,
+    });
+    const db = new FakeD1(game);
+    const room = createRoom(game, db);
+    const initial = await room.fetch(
+      new Request("https://game-room/analysis", {
+        method: "GET",
+        headers: { "x-user-id": "black-user" },
+      }),
+    );
+    const initialBody: {
+      analysis?: {
+        board?: { square: string; file: number; rank: number; piece: unknown }[];
+        hands?: unknown;
+      };
+    } = await initial.json();
+    const shuffled = [...(initialBody.analysis?.board ?? [])].reverse().map((square) => ({
+      ...square,
+      file: 1,
+      rank: 1,
+    }));
+
+    const response = await room.fetch(
+      new Request("https://game-room/analysis", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-user-id": "black-user",
+        },
+        body: JSON.stringify({
+          requestId: "00000000-0000-4000-8000-000000000307",
+          baseRevision: 0,
+          board: shuffled,
+          hands: initialBody.analysis?.hands,
+        }),
+      }),
+    );
+    const body: { analysis?: { board?: { square: string; file: number; rank: number }[] } } =
+      await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.analysis?.board?.slice(0, 10).map((square) => square.square)).toEqual([
+      "9a",
+      "8a",
+      "7a",
+      "6a",
+      "5a",
+      "4a",
+      "3a",
+      "2a",
+      "1a",
+      "9b",
+    ]);
+    expect(body.analysis?.board?.find((square) => square.square === "7f")).toEqual(
+      expect.objectContaining({ file: 7, rank: 6 }),
+    );
+  });
+
   it("rejects analysis updates before the game ends", async () => {
     const game = storedGame({
       mode: "friend",
