@@ -834,10 +834,7 @@ function ModeCard({
     >
       <input type="hidden" name="mode" value={mode} />
       <div style={{ display: "grid", gap: 12 }}>
-        <button
-          type="button"
-          aria-pressed={selected}
-          onClick={() => { gameMode.value = mode; }}
+        <label
           style={{
             width: "100%",
             display: "flex",
@@ -849,9 +846,20 @@ function ModeCard({
             border: "none",
             color: t.text.primary,
             textAlign: "left",
+            cursor: "pointer",
           }}
         >
-          <span style={{ fontFamily: fS, fontSize: 22, fontWeight: 800 }}>{title}</span>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+            <input
+              type="radio"
+              name="selected-mode"
+              value={mode}
+              checked={selected}
+              onChange={() => { gameMode.value = mode; }}
+              style={{ accentColor: accent, flexShrink: 0 }}
+            />
+            <span style={{ fontFamily: fS, fontSize: 22, fontWeight: 800 }}>{title}</span>
+          </span>
           <span
             aria-hidden="true"
             style={{
@@ -864,11 +872,12 @@ function ModeCard({
               color: selected ? accent : t.text.tertiary,
               fontFamily: fG,
               fontWeight: 900,
+              flexShrink: 0,
             }}
           >
             {mode === "cpu" ? "歩" : "対"}
           </span>
-        </button>
+        </label>
         <p style={{ fontFamily: fG, fontSize: 14, lineHeight: 1.8, color: t.text.secondary }}>
           {description}
         </p>
@@ -889,11 +898,11 @@ function ModeCard({
         </FieldGroup>
       ) : (
         <p style={{ fontFamily: fG, fontSize: 12, lineHeight: 1.7, color: t.text.tertiary }}>
-          作成するとそのまま戦闘モードへ進みます。
+          作成するとそのまま対局画面へ進みます。
         </p>
       )}
 
-      <Btn variant={selected ? "primary" : "secondary"} size="lg" full type="submit" disabled={busy.value}>
+      <Btn variant={selected ? "primary" : "secondary"} size="lg" full type="submit" disabled={busy.value || !selected}>
         {mode === "cpu" ? "CPUと始める" : "合言葉で進む"}
       </Btn>
     </form>
@@ -957,7 +966,7 @@ function GameListPanel() {
       <div style={{ display: "grid", gap: 6 }}>
         {games.value.length === 0 && (
           <p style={{ fontFamily: fG, fontSize: 13, color: t.text.tertiary, textAlign: "center", padding: "16px 0" }}>
-            対局なし
+            まだ対局はありません
           </p>
         )}
         <GameList onSelect={(gameId) => void selectGame(gameId)} />
