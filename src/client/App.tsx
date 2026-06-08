@@ -5,15 +5,19 @@ import {
   ApiClientError,
   acceptTermsAgreement,
   createGame,
+  downloadKif,
+  getAnalysis,
   getGame,
   getGameEvents,
   getSession,
   listGames,
   loginAccount,
+  loginGuest,
   logoutAccount,
   playMove,
   registerAccount,
   resignGame,
+  updateAnalysis,
   updateProfile,
 } from "./api";
 import {
@@ -50,11 +54,13 @@ import {
 } from "./design-system";
 import type {
   BoardPiece,
+  AnalysisSnapshot,
   GameEvent,
   GameMode,
   GameSnapshot,
   GameSummary,
   HandPieceType,
+  HandPiece,
   PlayerColor,
   PieceType,
   SessionPayload,
@@ -72,6 +78,10 @@ const events = signal<GameEvent[]>([]);
 const selectedSquare = signal<string | null>(null);
 const selectedHand = signal<HandPieceType | null>(null);
 const promotionChoice = signal<{ baseUsi: string; promotedUsi: string } | null>(null);
+const analysisMode = signal(false);
+const analysisSnapshot = signal<AnalysisSnapshot | null>(null);
+const analysisSelectedSquare = signal<string | null>(null);
+const analysisSelectedHand = signal<{ color: PlayerColor; type: HandPieceType } | null>(null);
 const notice = signal<string | null>(null);
 const busy = signal(false);
 const connection = signal<"idle" | "connecting" | "live" | "reconnecting" | "polling">("idle");
@@ -390,10 +400,6 @@ function AuthScreen() {
 
   useEffect(() => {
     let active = true;
-    if (authMode.value !== "register") {
-      setTermsHash("");
-      return () => { active = false; };
-    }
     void currentTermsHash().then((hash) => {
       if (active) {
         setTermsHash(hash);
@@ -450,7 +456,7 @@ function AuthScreen() {
 
         {/* Form */}
         <form onSubmit={(event) => void submitAuth(event)} style={{ display: "grid", gap: 16, padding: 24 }}>
-          <FieldGroup id="auth-handle" label="ハンドル" helpId="auth-handle-help" help="3〜24文字。半角英数字と _ のみ。cpu は予約済み。">
+          <FieldGroup id="auth-handle" label="ハンドル" helpId="auth-handle-help" help="3〜24文字。半角英数字と _ のみ。cpu は使用できません。guest_ で始まるハンドルも予約済みです。">
             <Input
               id="auth-handle"
               name="handle"
@@ -520,6 +526,50 @@ function AuthScreen() {
 
           <Btn variant="primary" size="lg" full type="submit" disabled={busy.value || (authMode.value === "register" && !termsHash)}>
             {authMode.value === "register" ? "登録して始める" : "ログイン"}
+          </Btn>
+        </form>
+        <form
+          onSubmit={(event) => void submitGuestLogin(event)}
+          style={{
+            display: "grid",
+            gap: 12,
+            padding: "0 24px 24px",
+            borderTop: `1px solid ${t.border.subtle}`,
+          }}
+        >
+          <input type="hidden" name="termsHash" value={termsHash || sessionTermsHash.value} />
+          <label
+            style={{
+              display: "flex",
+              gap: 10,
+              alignItems: "flex-start",
+              color: t.text.secondary,
+              fontFamily: fG,
+              fontSize: 12,
+              lineHeight: 1.6,
+              paddingTop: 16,
+            }}
+          >
+            <input
+              name="termsAccepted"
+              type="checkbox"
+              required
+              style={{ width: 16, height: 16, marginTop: 3, accentColor: t.accent.gold, flexShrink: 0 }}
+            />
+            <span>
+              利用規約に同意して、保存用パスワードなしのゲストとして入ります。{" "}
+              <a
+                href="/terms"
+                target="_blank"
+                rel="noreferrer"
+                style={{ color: t.accent.gold, fontWeight: 700 }}
+              >
+                利用規約を読む
+              </a>
+            </span>
+          </label>
+          <Btn variant="secondary" size="md" full type="submit" disabled={busy.value || !(termsHash || sessionTermsHash.value)}>
+            ゲストとしてログイン
           </Btn>
         </form>
       </div>
@@ -857,6 +907,10 @@ function BoardPanel() {
   const color = myColor(game, user.value.id);
   const orientation = color ?? "black";
   const choice = promotionChoice.value;
+  const displayedGame =
+    analysisMode.value && analysisSnapshot.value
+      ? { ...game, board: analysisSnapshot.value.board, hands: analysisSnapshot.value.hands }
+      : game;
 
   return (
     <div
@@ -896,6 +950,19 @@ function BoardPanel() {
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
           <StatusChip color={connectionColor(connection.value, t)}>{connectionLabel()}</StatusChip>
+          {game.status === "ended" && (
+            <Btn
+              variant={analysisMode.value ? "primary" : "secondary"}
+              size="sm"
+              onClick={() => void toggleAnalysisMode(game.id)}
+              disabled={busy.value}
+            >
+              {analysisMode.value ? "実戦譜" : "感想戦"}
+            </Btn>
+          )}
+          <Btn variant="secondary" size="sm" onClick={() => void handleDownloadKif(game.id)} disabled={busy.value}>
+            棋譜DL
+          </Btn>
           {color && game.status === "active" && (
             <Btn variant="danger" size="sm" onClick={() => void handleResign(game.id)} disabled={busy.value}>
               投了
@@ -904,14 +971,32 @@ function BoardPanel() {
         </div>
       </div>
 
+      {analysisMode.value && analysisSnapshot.value && (
+        <div
+          style={{
+            color: t.text.secondary,
+            backgroundColor: t.accent.goldDim,
+            border: `1px solid ${t.accent.gold}`,
+            borderRadius: R.md,
+            fontFamily: fG,
+            fontSize: 12,
+            lineHeight: 1.6,
+            padding: "8px 10px",
+            marginBottom: 8,
+          }}
+        >
+          感想戦中。実戦の棋譜は保存したまま、終局図のコピー上で空きマスへ自由に動かせます。
+        </div>
+      )}
+
       {/* White hand */}
-      <HandRow game={game} color="white" orientation={orientation} />
+      <HandRow game={displayedGame} color="white" orientation={orientation} />
 
       {/* Board */}
-      <ShogiBoard game={game} orientation={orientation} />
+      <ShogiBoard game={displayedGame} orientation={orientation} />
 
       {/* Black hand */}
-      <HandRow game={game} color="black" orientation={orientation} />
+      <HandRow game={displayedGame} color="black" orientation={orientation} />
 
       {/* Promotion dialog */}
       <Modal open={choice !== null} onClose={() => { promotionChoice.value = null; }} title="成りますか？">
@@ -977,7 +1062,7 @@ function ShogiBoard({
   const lastFrom = lastMoveUsi.slice(0, 2);
   const lastTo = lastMoveUsi.slice(2, 4);
   const color = user.value ? myColor(game, user.value.id) : null;
-  const canShowLegalDestinations = color !== null && game.currentTurn === color;
+  const canShowLegalDestinations = !analysisMode.value && color !== null && game.currentTurn === color;
   const legalDestinations = new Set(
     canShowLegalDestinations
       ? selectedSquare.value
@@ -1032,9 +1117,10 @@ function ShogiBoard({
               const sq = square.square;
               const isLastMove = sq === lastFrom || sq === lastTo;
               const isLegalDestination = legalDestinations.has(sq);
+              const analysisSelected = analysisMode.value && analysisSelectedSquare.value === square.square;
 
               let bgColor = "transparent";
-              if (selected) bgColor = t.semantic.selected;
+              if (selected || analysisSelected) bgColor = t.semantic.selected;
               else if (isLegalDestination) bgColor = t.semantic.legalMove;
               else if (isLastMove) bgColor = t.semantic.lastMove;
 
@@ -1044,7 +1130,7 @@ function ShogiBoard({
                   key={square.square}
                   onClick={() => void handleSquareClick(square.square)}
                   disabled={busy.value}
-                  aria-label={boardSquareLabel(square.square, square.piece, selected, isLegalDestination)}
+                  aria-label={boardSquareLabel(square.square, square.piece, selected || analysisSelected, isLegalDestination)}
                   style={{
                     width: cellSize,
                     height: cellSize,
@@ -1129,7 +1215,7 @@ function HandRow({
   const visibleColor = orientation === "black" ? color : color === "black" ? "white" : "black";
   const pieces = game.hands[visibleColor];
   const ownHand = user.value ? myColor(game, user.value.id) === visibleColor : false;
-  const canSelectHand = game.status === "active" && ownHand;
+  const canSelectHand = analysisMode.value ? game.status === "ended" : game.status === "active" && ownHand;
 
   return (
     <div
@@ -1150,17 +1236,16 @@ function HandRow({
         <span style={{ fontFamily: fG, fontSize: 12, color: t.text.tertiary }}>なし</span>
       )}
       {pieces.map((piece) => {
-        const sel = ownHand && selectedHand.value === piece.type;
+        const sel = analysisMode.value
+          ? analysisSelectedHand.value?.color === visibleColor && analysisSelectedHand.value.type === piece.type
+          : ownHand && selectedHand.value === piece.type;
         return (
           <button
             type="button"
             key={piece.type}
             aria-pressed={sel}
             disabled={busy.value || !canSelectHand}
-            onClick={() => {
-              selectedSquare.value = null;
-              selectedHand.value = selectedHand.value === piece.type ? null : piece.type;
-            }}
+            onClick={() => { handleHandClick(visibleColor, piece.type); }}
             style={{
               display: "flex",
               alignItems: "center",
@@ -1299,7 +1384,7 @@ function connectionColor(conn: "idle" | "connecting" | "live" | "reconnecting" |
   return t.text.tertiary;
 }
 
-// ─── Event handlers (unchanged logic) ────────────────
+// ─── Event handlers ──────────────────────────────────
 async function bootstrap(): Promise<void> {
   try {
     const session = await getSession();
@@ -1329,6 +1414,20 @@ async function submitAuth(event: SubmitEvent): Promise<void> {
     if (!session.termsAgreementRequired) {
       await refreshGames();
     }
+  });
+}
+
+async function submitGuestLogin(event: SubmitEvent): Promise<void> {
+  event.preventDefault();
+  const form = new FormData(event.currentTarget as HTMLFormElement);
+  const termsHashEntry = form.get("termsHash");
+  await withBusy(async () => {
+    const session = await loginGuest({
+      termsAccepted: form.get("termsAccepted") === "on",
+      termsHash: typeof termsHashEntry === "string" ? termsHashEntry : "",
+    });
+    applySession(session);
+    await refreshGames();
   });
 }
 
@@ -1372,6 +1471,8 @@ async function handleLogout(): Promise<void> {
     games.value = [];
     activeGame.value = null;
     events.value = [];
+    analysisMode.value = false;
+    analysisSnapshot.value = null;
     closeRealtime();
   });
 }
@@ -1409,6 +1510,10 @@ async function selectGame(gameId: string): Promise<void> {
     selectedSquare.value = null;
     selectedHand.value = null;
     promotionChoice.value = null;
+    analysisMode.value = false;
+    analysisSnapshot.value = null;
+    analysisSelectedSquare.value = null;
+    analysisSelectedHand.value = null;
     await refreshEvents();
     connectRealtime(gameId);
   });
@@ -1417,6 +1522,10 @@ async function selectGame(gameId: string): Promise<void> {
 async function handleSquareClick(square: string): Promise<void> {
   const game = activeGame.value;
   if (!game || !user.value || busy.value) return;
+  if (analysisMode.value) {
+    await handleAnalysisSquareClick(square);
+    return;
+  }
   if (promotionChoice.value) { promotionChoice.value = null; return; }
   const color = myColor(game, user.value.id);
   if (!color || game.status !== "active") return;
@@ -1451,6 +1560,18 @@ async function handleSquareClick(square: string): Promise<void> {
   await submitMove(options.baseUsi);
 }
 
+function handleHandClick(color: PlayerColor, type: HandPieceType): void {
+  if (analysisMode.value) {
+    analysisSelectedSquare.value = null;
+    const selected = analysisSelectedHand.value;
+    analysisSelectedHand.value =
+      selected?.color === color && selected.type === type ? null : { color, type };
+    return;
+  }
+  selectedSquare.value = null;
+  selectedHand.value = selectedHand.value === type ? null : type;
+}
+
 async function submitMove(usi: string): Promise<void> {
   const game = activeGame.value;
   if (!game || busy.value) return;
@@ -1474,6 +1595,104 @@ async function handleResign(gameId: string): Promise<void> {
   });
 }
 
+async function toggleAnalysisMode(gameId: string): Promise<void> {
+  if (analysisMode.value) {
+    analysisMode.value = false;
+    analysisSelectedSquare.value = null;
+    analysisSelectedHand.value = null;
+    return;
+  }
+  await withBusy(async () => {
+    const response = await getAnalysis(gameId);
+    analysisSnapshot.value = response.analysis;
+    analysisMode.value = true;
+    selectedSquare.value = null;
+    selectedHand.value = null;
+    promotionChoice.value = null;
+  });
+}
+
+async function handleAnalysisSquareClick(square: string): Promise<void> {
+  const game = activeGame.value;
+  const analysis = analysisSnapshot.value;
+  if (!game || !analysis || busy.value) return;
+  const board = analysis.board.map((candidate) => ({
+    ...candidate,
+    piece: candidate.piece ? { ...candidate.piece } : null,
+  }));
+  const target = board.find((candidate) => candidate.square === square);
+  if (!target) return;
+
+  if (analysisSelectedHand.value) {
+    const hands = cloneHands(analysis.hands);
+    const handPiece = decrementHand(hands[analysisSelectedHand.value.color], analysisSelectedHand.value.type);
+    if (!handPiece) return;
+    if (target.piece) return;
+    target.piece = {
+      color: analysisSelectedHand.value.color,
+      type: handPiece.type,
+      label: handPiece.label,
+    };
+    analysisSelectedHand.value = null;
+    await persistAnalysis(board, hands);
+    return;
+  }
+
+  const selected = analysisSelectedSquare.value;
+  if (!selected) {
+    if (target.piece) {
+      analysisSelectedSquare.value = square;
+    }
+    return;
+  }
+  if (selected === square) {
+    analysisSelectedSquare.value = null;
+    return;
+  }
+  const source = board.find((candidate) => candidate.square === selected);
+  if (!source?.piece) {
+    analysisSelectedSquare.value = null;
+    return;
+  }
+  if (target.piece) {
+    analysisSelectedSquare.value = null;
+    return;
+  }
+  const moving = source.piece;
+  source.piece = null;
+  target.piece = moving;
+  analysisSelectedSquare.value = null;
+  await persistAnalysis(board, cloneHands(analysis.hands));
+}
+
+async function persistAnalysis(board: AnalysisSnapshot["board"], hands: AnalysisSnapshot["hands"]): Promise<void> {
+  const game = activeGame.value;
+  if (!game) return;
+  await withBusy(async () => {
+    const response = await updateAnalysis(game.id, {
+      requestId: crypto.randomUUID(),
+      baseRevision: analysisSnapshot.value?.revision ?? 0,
+      board,
+      hands,
+    });
+    analysisSnapshot.value = response.analysis;
+  });
+}
+
+async function handleDownloadKif(gameId: string): Promise<void> {
+  await withBusy(async () => {
+    const blob = await downloadKif(gameId);
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `${gameId}.kif`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  });
+}
+
 async function refreshEvents(): Promise<void> {
   const game = activeGame.value;
   if (!game) { events.value = []; return; }
@@ -1489,12 +1708,15 @@ function connectRealtime(gameId: string): void {
   socket = ws;
   ws.addEventListener("open", () => { reconnectAttempts = 0; connection.value = "live"; stopPolling(); });
   ws.addEventListener("message", (event) => {
-    const payload = JSON.parse(String(event.data)) as { type?: string; game?: GameSnapshot };
+    const payload = JSON.parse(String(event.data)) as { type?: string; game?: GameSnapshot; analysis?: AnalysisSnapshot };
     if (payload.game) {
       if (socket !== ws || activeGame.value?.id !== gameId) return;
       applyGameSnapshot(payload.game);
       void refreshGames();
       void refreshEvents();
+    }
+    if (payload.analysis && socket === ws && activeGame.value?.id === gameId) {
+      analysisSnapshot.value = payload.analysis;
     }
   });
   ws.addEventListener("close", () => { if (socket === ws) { scheduleReconnect(gameId); } });
@@ -1520,6 +1742,10 @@ function startPolling(gameId: string): void {
       .then(async (response) => {
         if (activeGame.value?.id !== gameId) return;
         applyGameSnapshot(response.game);
+        if (analysisMode.value) {
+          const analysis = await getAnalysis(gameId);
+          analysisSnapshot.value = analysis.analysis;
+        }
         await refreshGames();
         await refreshEvents();
       })
@@ -1541,6 +1767,12 @@ function closeRealtime(): void {
 
 function applyGameSnapshot(game: GameSnapshot): void {
   activeGame.value = game;
+  if (game.status !== "ended") {
+    analysisMode.value = false;
+    analysisSnapshot.value = null;
+    analysisSelectedSquare.value = null;
+    analysisSelectedHand.value = null;
+  }
   if (!user.value) return;
   const color = myColor(game, user.value.id);
   if (!color || game.status !== "active") {
@@ -1558,6 +1790,26 @@ function applyGameSnapshot(game: GameSnapshot): void {
   if (game.currentTurn !== color) {
     promotionChoice.value = null;
   }
+}
+
+function cloneHands(hands: Record<PlayerColor, HandPiece[]>): Record<PlayerColor, HandPiece[]> {
+  return {
+    black: hands.black.map((piece) => ({ ...piece })),
+    white: hands.white.map((piece) => ({ ...piece })),
+  };
+}
+
+function decrementHand(pieces: HandPiece[], type: HandPieceType): HandPiece | null {
+  const index = pieces.findIndex((piece) => piece.type === type && piece.count > 0);
+  if (index < 0) return null;
+  const piece = pieces[index];
+  if (!piece) return null;
+  if (piece.count <= 1) {
+    pieces.splice(index, 1);
+  } else {
+    pieces[index] = { ...piece, count: piece.count - 1 };
+  }
+  return piece;
 }
 
 async function withBusy(action: () => Promise<void>): Promise<void> {

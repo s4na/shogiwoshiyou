@@ -1,4 +1,5 @@
 import type {
+  AnalysisResponse,
   ApiError,
   CreateGameResponse,
   GameMode,
@@ -39,6 +40,13 @@ export async function registerAccount(input: JsonBody): Promise<SessionPayload> 
 
 export async function loginAccount(input: JsonBody): Promise<SessionPayload> {
   return api<SessionPayload>("/api/auth/login", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function loginGuest(input: JsonBody): Promise<SessionPayload> {
+  return api<SessionPayload>("/api/auth/guest", {
     method: "POST",
     body: JSON.stringify(input),
   });
@@ -101,6 +109,33 @@ export async function resignGame(gameId: string, requestId: string): Promise<Gam
 
 export async function getGameEvents(gameId: string, afterSeq: number): Promise<GameEventsResponse> {
   return api<GameEventsResponse>(`/api/games/${gameId}/events?after=${String(afterSeq)}`, {}, 1);
+}
+
+export async function getAnalysis(gameId: string): Promise<AnalysisResponse> {
+  return api<AnalysisResponse>(`/api/games/${gameId}/analysis`, {}, 1);
+}
+
+export async function updateAnalysis(
+  gameId: string,
+  input: JsonBody,
+): Promise<AnalysisResponse> {
+  return api<AnalysisResponse>(
+    `/api/games/${gameId}/analysis`,
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+  );
+}
+
+export async function downloadKif(gameId: string): Promise<Blob> {
+  const response = await fetch(`/api/games/${gameId}/export.kif`, {
+    credentials: "same-origin",
+  });
+  if (!response.ok) {
+    throw await toApiError(response);
+  }
+  return response.blob();
 }
 
 async function api<T>(path: string, init: RequestInit = {}, retries = 0): Promise<T> {

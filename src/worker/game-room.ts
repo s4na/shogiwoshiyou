@@ -1,4 +1,13 @@
-import type { GameResponse } from "../shared/types";
+import type {
+  AnalysisResponse,
+  AnalysisSnapshot,
+  BoardPiece,
+  BoardSquare,
+  GameResponse,
+  HandPiece,
+  PlayerColor,
+  UserSummary,
+} from "../shared/types";
 import type { Env } from "./env";
 import { loadUsers, toStoredGame, type GameRow } from "./game-store";
 import {
@@ -6,6 +15,7 @@ import {
   chooseCpuMove,
   createInitialGame,
   endGameByCheckmate,
+  exportGameAsKif,
   expectedUserForTurn,
   isCurrentPlayerCheckmated,
   opponentUserId,
@@ -23,6 +33,25 @@ type GameEventType =
 
 const CPU_USER_ID = "cpu-basic";
 const CPU_MOVE_DELAY_MS = 800;
+const PIECE_TYPES = new Set([
+  "pawn",
+  "lance",
+  "knight",
+  "silver",
+  "gold",
+  "bishop",
+  "rook",
+  "king",
+  "promPawn",
+  "promLance",
+  "promKnight",
+  "promSilver",
+  "horse",
+  "dragon",
+]);
+const HAND_PIECE_TYPES = new Set(["pawn", "lance", "knight", "silver", "gold", "bishop", "rook"]);
+const COLORS = new Set(["black", "white"]);
+const RANK_CODES = "abcdefghi";
 
 type MoveRequest = {
   usi: string;
@@ -31,6 +60,17 @@ type MoveRequest = {
 
 type ResignRequest = {
   requestId: string;
+};
+
+type AnalysisUpdateRequest = {
+  requestId: string;
+  baseRevision: number;
+  board: BoardSquare[];
+  hands: Record<PlayerColor, HandPiece[]>;
+};
+
+type StoredAnalysisSnapshot = Omit<AnalysisSnapshot, "updatedBy"> & {
+  updatedByUserId: string | null;
 };
 
 export class GameRoom implements DurableObject {
@@ -66,6 +106,16 @@ export class GameRoom implements DurableObject {
       if (url.pathname === "/resign" && request.method === "POST") {
         const body: Partial<ResignRequest> = await request.json();
         return await this.resign(userId, body);
+      }
+      if (url.pathname === "/export/kif" && request.method === "GET") {
+        return await this.exportKif(userId);
+      }
+      if (url.pathname === "/analysis" && request.method === "GET") {
+        return await this.analysisSnapshotResponse(userId);
+      }
+      if (url.pathname === "/analysis" && request.method === "POST") {
+        const body: Partial<AnalysisUpdateRequest> = await request.json();
+        return await this.updateAnalysis(userId, body);
       }
       if (url.pathname === "/snapshot" && request.method === "GET") {
         const game = await this.loadGame();
@@ -296,6 +346,54 @@ export class GameRoom implements DurableObject {
     return this.snapshotResponse(next);
   }
 
+  private async exportKif(userId: string): Promise<Response> {
+    const game = await this.requireGame();
+    this.ensureCanViewGame(game, userId);
+    const users = await loadUsers(
+      this.env.DB,
+      [game.blackUserId, game.whiteUserId ?? "", game.winnerUserId ?? ""].filter(Boolean),
+    );
+    return new Response(exportGameAsKif(game, users), {
+      headers: {
+        "content-type": "application/x-kif; charset=utf-8",
+        "content-disposition": `attachment; filename="${game.id}.kif"`,
+      },
+    });
+  }
+
+  private async analysisSnapshotResponse(userId: string): Promise<Response> {
+    const game = await this.requireGame();
+    this.ensureCanUseAnalysis(game, userId);
+    return Response.json({ analysis: await this.loadOrCreateAnalysis(game) } satisfies AnalysisResponse);
+  }
+
+  private async updateAnalysis(
+    userId: string,
+    body: Partial<AnalysisUpdateRequest>,
+  ): Promise<Response> {
+    const requestId = validateRequestId(body.requestId);
+    const game = await this.requireGame();
+    this.ensureCanUseAnalysis(game, userId);
+    const now = new Date().toISOString();
+    const previous = await this.loadOrCreateStoredAnalysis(game);
+    if (body.baseRevision !== previous.revision) {
+      throw new RoomError(409, "analysis_revision_conflict", "感想戦の盤面が更新されています。");
+    }
+    const next: StoredAnalysisSnapshot = {
+      gameId: game.id,
+      sourceGameVersion: game.version,
+      revision: previous.revision + 1,
+      board: validateAnalysisBoard(body.board),
+      hands: validateAnalysisHands(body.hands),
+      updatedAt: now,
+      updatedByUserId: userId,
+    };
+    await this.state.storage.put(analysisStorageKey(game.id), next);
+    const analysis = await this.publicAnalysis(next);
+    this.broadcastAnalysis(analysis, requestId);
+    return Response.json({ analysis } satisfies AnalysisResponse);
+  }
+
   private async returnIfDuplicateRequest(
     game: StoredGame,
     clientRequestId: string,
@@ -457,6 +555,14 @@ export class GameRoom implements DurableObject {
         ...(await this.snapshotPayload(game)),
       }),
     );
+    if (game.status === "ended") {
+      server.send(
+        JSON.stringify({
+          type: "analysis.snapshot",
+          analysis: await this.loadOrCreateAnalysis(game),
+        }),
+      );
+    }
     return new Response(null, { status: 101, webSocket: client });
   }
 
@@ -478,6 +584,63 @@ export class GameRoom implements DurableObject {
         ws.close(1011, "broadcast failed");
       }
     }
+  }
+
+  private broadcastAnalysis(analysis: AnalysisSnapshot, requestId: string): void {
+    const message = JSON.stringify({ type: "analysis.updated", analysis, requestId });
+    for (const ws of this.state.getWebSockets()) {
+      try {
+        ws.send(message);
+      } catch {
+        ws.close(1011, "analysis broadcast failed");
+      }
+    }
+  }
+
+  private ensureCanUseAnalysis(game: StoredGame, userId: string): void {
+    this.ensureCanViewGame(game, userId);
+    if (game.status !== "ended") {
+      throw new RoomError(409, "game_not_ended", "感想戦は終局後に利用できます。");
+    }
+  }
+
+  private async loadOrCreateAnalysis(game: StoredGame): Promise<AnalysisSnapshot> {
+    return this.publicAnalysis(await this.loadOrCreateStoredAnalysis(game));
+  }
+
+  private async loadOrCreateStoredAnalysis(game: StoredGame): Promise<StoredAnalysisSnapshot> {
+    const existing = await this.state.storage.get<StoredAnalysisSnapshot>(analysisStorageKey(game.id));
+    if (existing?.sourceGameVersion === game.version) {
+      return existing;
+    }
+    const snapshot = (await this.snapshotPayload(game)).game;
+    const now = new Date().toISOString();
+    const initial: StoredAnalysisSnapshot = {
+      gameId: game.id,
+      sourceGameVersion: game.version,
+      revision: 0,
+      board: snapshot.board,
+      hands: snapshot.hands,
+      updatedAt: now,
+      updatedByUserId: null,
+    };
+    await this.state.storage.put(analysisStorageKey(game.id), initial);
+    return initial;
+  }
+
+  private async publicAnalysis(snapshot: StoredAnalysisSnapshot): Promise<AnalysisSnapshot> {
+    const users = snapshot.updatedByUserId
+      ? await loadUsers(this.env.DB, [snapshot.updatedByUserId])
+      : new Map<string, UserSummary>();
+    return {
+      gameId: snapshot.gameId,
+      sourceGameVersion: snapshot.sourceGameVersion,
+      revision: snapshot.revision,
+      board: snapshot.board,
+      hands: snapshot.hands,
+      updatedAt: snapshot.updatedAt,
+      updatedBy: snapshot.updatedByUserId ? users.get(snapshot.updatedByUserId) ?? null : null,
+    };
   }
 
   private async persistNewGame(
@@ -628,4 +791,129 @@ function validateUsi(value: string | undefined): string {
     throw new RoomError(400, "bad_usi", "指し手が不正です。");
   }
   return value;
+}
+
+function analysisStorageKey(gameId: string): string {
+  return `analysis:${gameId}`;
+}
+
+function validateAnalysisBoard(value: unknown): BoardSquare[] {
+  if (!Array.isArray(value) || value.length !== 81) {
+    throw new RoomError(400, "bad_analysis_board", "感想戦の盤面が不正です。");
+  }
+  const seen = new Set<string>();
+  const squares: unknown[] = value;
+  const normalized = new Map<string, BoardSquare>();
+  for (const square of squares) {
+    if (!isRecord(square)) {
+      throw new RoomError(400, "bad_analysis_board", "感想戦の盤面が不正です。");
+    }
+    const expected = squareFromUsi(typeof square.square === "string" ? square.square : "");
+    if (
+      typeof square.square !== "string" ||
+      !/^[1-9][a-i]$/.test(square.square) ||
+      !expected ||
+      seen.has(square.square)
+    ) {
+      throw new RoomError(400, "bad_analysis_board", "感想戦の盤面が不正です。");
+    }
+    seen.add(square.square);
+    normalized.set(square.square, {
+      square: square.square,
+      file: expected.file,
+      rank: expected.rank,
+      piece: square.piece === null ? null : validateBoardPiece(square.piece),
+    });
+  }
+  return orderedSquareIds().map((square) => {
+    const normalizedSquare = normalized.get(square);
+    if (!normalizedSquare) {
+      throw new RoomError(400, "bad_analysis_board", "感想戦の盤面が不正です。");
+    }
+    return normalizedSquare;
+  });
+}
+
+function validateAnalysisHands(value: unknown): Record<PlayerColor, HandPiece[]> {
+  if (!isRecord(value) || !Array.isArray(value.black) || !Array.isArray(value.white)) {
+    throw new RoomError(400, "bad_analysis_hands", "感想戦の持駒が不正です。");
+  }
+  return {
+    black: validateHandPieces(value.black),
+    white: validateHandPieces(value.white),
+  };
+}
+
+function validateBoardPiece(value: unknown): BoardPiece {
+  if (
+    !isRecord(value) ||
+    typeof value.color !== "string" ||
+    !COLORS.has(value.color) ||
+    typeof value.type !== "string" ||
+    !PIECE_TYPES.has(value.type) ||
+    typeof value.label !== "string" ||
+    value.label.length < 1 ||
+    value.label.length > 2
+  ) {
+    throw new RoomError(400, "bad_analysis_piece", "感想戦の駒が不正です。");
+  }
+  return {
+    color: value.color as PlayerColor,
+    type: value.type as BoardPiece["type"],
+    label: value.label,
+  };
+}
+
+function validateHandPieces(value: unknown[]): HandPiece[] {
+  if (value.length > HAND_PIECE_TYPES.size) {
+    throw new RoomError(400, "bad_analysis_hands", "感想戦の持駒が不正です。");
+  }
+  const seen = new Set<string>();
+  return value.map((piece) => {
+    const count = isRecord(piece) ? piece.count : null;
+    if (
+      !isRecord(piece) ||
+      typeof piece.type !== "string" ||
+      !HAND_PIECE_TYPES.has(piece.type) ||
+      seen.has(piece.type) ||
+      typeof piece.label !== "string" ||
+      piece.label.length < 1 ||
+      piece.label.length > 2 ||
+      typeof count !== "number" ||
+      !Number.isInteger(count) ||
+      count < 1 ||
+      count > 18
+    ) {
+      throw new RoomError(400, "bad_analysis_hands", "感想戦の持駒が不正です。");
+    }
+    seen.add(piece.type);
+    return {
+      type: piece.type as HandPiece["type"],
+      label: piece.label,
+      count,
+    };
+  });
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function squareFromUsi(square: string): { file: number; rank: number } | null {
+  const file = Number(square[0]);
+  const rank = RANK_CODES.indexOf(square[1] ?? "") + 1;
+  if (!Number.isInteger(file) || file < 1 || file > 9 || rank < 1 || rank > 9) {
+    return null;
+  }
+  return { file, rank };
+}
+
+function orderedSquareIds(): string[] {
+  const squares: string[] = [];
+  for (const rank of RANK_CODES) {
+    for (let file = 9; file >= 1; file -= 1) {
+      squares.push(`${String(file)}${rank}`);
+    }
+  }
+  return squares;
 }
