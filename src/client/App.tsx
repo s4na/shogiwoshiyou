@@ -1188,6 +1188,14 @@ function HandRow({
 function HistoryPanel() {
   const t = useTheme();
   const game = activeGame.value;
+  const listRef = useRef<HTMLOListElement>(null);
+
+  useEffect(() => {
+    if (listRef.current) {
+      listRef.current.scrollTop = listRef.current.scrollHeight;
+    }
+  }, [game?.moves.length]);
+
   return (
     <Card title="棋譜">
       {!game && (
@@ -1201,6 +1209,7 @@ function HistoryPanel() {
             <span style={{ fontFamily: fG, fontSize: 12, color: t.text.secondary }}>{game.moves.length}手</span>
           </div>
           <ol
+            ref={listRef}
             style={{
               listStyle: "none",
               display: "grid",
