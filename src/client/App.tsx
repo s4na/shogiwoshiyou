@@ -786,7 +786,7 @@ function ModeSelectScreen() {
       <form
         onSubmit={(event) => void submitCreateGame(event)}
         aria-label="対戦モード"
-        style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 16 }}
+        style={{ display: "grid", gridTemplateColumns: "1fr", gap: 16, maxWidth: 560 }}
       >
         <ModeCard
           mode="cpu"

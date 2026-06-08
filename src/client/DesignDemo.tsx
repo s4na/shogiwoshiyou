@@ -903,7 +903,7 @@ function MockModeSelectScreen() {
         <h2 style={{ fontFamily: fS, fontSize: 24, fontWeight: 700, color: t.text.primary }}>今日はどう指しますか</h2>
         <p style={{ fontFamily: fG, fontSize: 14, lineHeight: 1.8, color: t.text.secondary }}>新しく始めるか、途中または最近の対局に戻るかを選んでから盤面へ進みます。</p>
       </section>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 14, maxWidth: 560 }}>
         <MockModeCard mode="cpu" selected />
         <MockModeCard mode="friend" />
       </div>
