@@ -824,33 +824,38 @@ function MockGameListPanel({ showWaiting, inBattle }: { showWaiting?: boolean; i
       { id:"1", b:"nakata", w:"CPU", status:"active", moves:12, mode:"cpu", sel:true },
       { id:"2", b:"nakata", w:"CPU", status:"ended", moves:45, mode:"cpu", sel:false },
     ];
+
+  if (inBattle) {
+    return (
+      <div style={{ paddingTop: 4 }}>
+        <Btn variant="ghost" size="sm">← モード選択へ</Btn>
+      </div>
+    );
+  }
+
   return (
     <div style={{ backgroundColor: t.bg.elevated, borderRadius: R.lg, border: `1px solid ${t.border.default}`, padding: 14 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: inBattle ? 0 : 14 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
         <h2 style={{ fontFamily: fS, fontSize: 15, fontWeight: 700, color: t.text.primary }}>戦闘モード</h2>
         <Btn variant="secondary" size="sm">← モード選択へ</Btn>
       </div>
-      {!inBattle && (
-        <>
-          <div style={{ display: "grid", gap: 10, marginBottom: 12 }}>
-            <Btn variant="secondary" size="sm">対局一覧を更新</Btn>
+      <div style={{ display: "grid", gap: 10, marginBottom: 12 }}>
+        <Btn variant="secondary" size="sm">対局一覧を更新</Btn>
+      </div>
+      <div style={{ display: "grid", gap: 6 }}>
+        {games.map((g) => (
+          <div key={g.id} style={{ display: "grid", gap: 4, padding: "8px 10px", backgroundColor: g.sel ? t.accent.jadeDim : t.bg.tertiary, border: `1px solid ${g.sel ? t.accent.jade : t.border.subtle}`, borderRadius: R.md }}>
+            <span style={{ display: "flex", gap: 6, alignItems: "center", fontFamily: fG, fontSize: 12 }}>
+              <strong style={{ color: t.text.primary }}>{g.b}</strong>
+              <span style={{ color: t.text.tertiary }}>対</span>
+              <strong style={{ color: t.text.primary }}>{g.w ?? "相手待ち"}</strong>
+            </span>
+            <span style={{ fontFamily: fG, fontSize: 11, color: t.text.tertiary }}>
+              {g.mode==="cpu" ? "CPU対戦" : "友達対戦"} / {g.status==="waiting" ? "相手待ち" : g.status==="active" ? `${String(g.moves)}手` : "終局"}
+            </span>
           </div>
-          <div style={{ display: "grid", gap: 6 }}>
-            {games.map((g) => (
-              <div key={g.id} style={{ display: "grid", gap: 4, padding: "8px 10px", backgroundColor: g.sel ? t.accent.jadeDim : t.bg.tertiary, border: `1px solid ${g.sel ? t.accent.jade : t.border.subtle}`, borderRadius: R.md }}>
-                <span style={{ display: "flex", gap: 6, alignItems: "center", fontFamily: fG, fontSize: 12 }}>
-                  <strong style={{ color: t.text.primary }}>{g.b}</strong>
-                  <span style={{ color: t.text.tertiary }}>対</span>
-                  <strong style={{ color: t.text.primary }}>{g.w ?? "相手待ち"}</strong>
-                </span>
-                <span style={{ fontFamily: fG, fontSize: 11, color: t.text.tertiary }}>
-                  {g.mode==="cpu" ? "CPU対戦" : "友達対戦"} / {g.status==="waiting" ? "相手待ち" : g.status==="active" ? `${String(g.moves)}手` : "終局"}
-                </span>
-              </div>
-            ))}
-          </div>
-        </>
-      )}
+        ))}
+      </div>
     </div>
   );
 }
