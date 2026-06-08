@@ -903,7 +903,7 @@ function ModeCard({
       )}
 
       <Btn variant={selected ? "primary" : "secondary"} size="lg" full type="submit" disabled={busy.value || !selected}>
-        {mode === "cpu" ? "CPUと始める" : "合言葉で進む"}
+        {mode === "cpu" ? "CPUと始める" : "合言葉で待ち合わせる"}
       </Btn>
     </form>
   );
@@ -953,7 +953,7 @@ function GameListPanel() {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
         <h2 style={{ fontFamily: fS, fontSize: 16, fontWeight: 700, color: t.text.primary }}>戦闘モード</h2>
         <Btn variant="ghost" size="sm" onClick={() => { returnToModeSelect(); }} disabled={busy.value}>
-          モード選択
+          モード選択へ戻る
         </Btn>
       </div>
 
