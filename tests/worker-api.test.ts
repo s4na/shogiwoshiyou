@@ -252,6 +252,40 @@ describe("auth API", () => {
     expect(db.userCount()).toBe(userCountBefore);
     expect(db.termsAgreements).toHaveLength(0);
   });
+
+  it("creates a guest session without storing password credentials", async () => {
+    const db = new FakeD1(null);
+    const env = {
+      DB: db as unknown as D1Database,
+      GAME_ROOM: new FakeGameRoomNamespace(db) as unknown as DurableObjectNamespace,
+      SESSION_COOKIE_NAME: "sid",
+    } satisfies Env;
+    const origin = "http://localhost";
+
+    const response = await app.request(
+      `${origin}/api/auth/guest`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          origin,
+        },
+        body: JSON.stringify({
+          termsAccepted: true,
+          termsHash: CURRENT_TERMS_HASH,
+        }),
+      },
+      env,
+    );
+    const body: { user?: { handle?: string; isGuest?: boolean } } = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(response.headers.get("set-cookie")).toEqual(expect.stringContaining("sid="));
+    expect(body.user?.handle).toEqual(expect.stringMatching(/^guest_[0-9a-f]{12}$/));
+    expect(body.user?.isGuest).toBe(true);
+    expect(db.credentialCount()).toBe(0);
+    expect(db.termsAgreements).toHaveLength(1);
+  });
 });
 
 describe("GameRoom moves", () => {
@@ -683,6 +717,154 @@ describe("GameRoom moves", () => {
       }),
     );
   });
+
+  it("downloads a KIF export without changing the stored move history", async () => {
+    const game = storedGame({
+      mode: "friend",
+      whiteUserId: "white-user",
+      moves: ["7g7f", "3c3d"],
+      sfen: "lnsgkgsnl/1r5b1/1pppppppp/p8/9/2P6/PP1PPPPPP/1B5R1/LNSGKGSNL b - 1",
+      currentTurn: "black",
+      status: "ended",
+      winnerUserId: "black-user",
+      endReason: "resign",
+      version: 3,
+      lastEventSeq: 4,
+    });
+    const db = new FakeD1(game);
+    const room = createRoom(game, db);
+
+    const response = await room.fetch(
+      new Request("https://game-room/export/kif", {
+        method: "GET",
+        headers: { "x-user-id": "black-user" },
+      }),
+    );
+    const text = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("application/x-kif");
+    expect(text).toContain("先手：先手");
+    expect(text).toContain("後手：後手");
+    expect(text).toContain("７六歩 (7g7f)");
+    expect(text).toContain("投了");
+    expect(db.updatedGame).toBeNull();
+    expect(db.rowForGame(game.id)?.moves_json).toBe(JSON.stringify(["7g7f", "3c3d"]));
+  });
+
+  it("keeps post-game analysis separate from persisted game moves", async () => {
+    const game = storedGame({
+      mode: "friend",
+      whiteUserId: "white-user",
+      status: "ended",
+      winnerUserId: "black-user",
+      endReason: "resign",
+      moves: ["7g7f"],
+      sfen: "lnsgkgsnl/1r5b1/ppppppppp/9/9/2P6/PP1PPPPPP/1B5R1/LNSGKGSNL w - 1",
+      currentTurn: "white",
+      version: 2,
+      lastEventSeq: 3,
+    });
+    const db = new FakeD1(game);
+    const room = createRoom(game, db);
+
+    const initial = await room.fetch(
+      new Request("https://game-room/analysis", {
+        method: "GET",
+        headers: { "x-user-id": "black-user" },
+      }),
+    );
+    const initialBody: { analysis?: { board?: { square: string; piece: unknown }[]; hands?: unknown } } =
+      await initial.json();
+    const board = (initialBody.analysis?.board ?? []).map((square) => ({
+      ...square,
+      piece: square.piece && typeof square.piece === "object" ? { ...square.piece } : null,
+    }));
+    const from = board.find((square) => square.square === "7f");
+    const to = board.find((square) => square.square === "7e");
+    expect(from?.piece).toBeTruthy();
+    if (from && to) {
+      to.piece = from.piece;
+      from.piece = null;
+    }
+
+    const updated = await room.fetch(
+      new Request("https://game-room/analysis", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-user-id": "white-user",
+        },
+        body: JSON.stringify({
+          requestId: "00000000-0000-4000-8000-000000000301",
+          board,
+          hands: initialBody.analysis?.hands,
+        }),
+      }),
+    );
+    const updatedBody: {
+      analysis?: {
+        board?: { square: string; piece: { label?: string } | null }[];
+        revision?: number;
+        updatedBy?: { id?: string };
+      };
+    } = await updated.json();
+
+    expect(initial.status).toBe(200);
+    expect(to).toBeTruthy();
+    expect(updated.status).toBe(200);
+    expect(updatedBody.analysis?.revision).toBe(1);
+    expect(updatedBody.analysis?.updatedBy?.id).toBe("white-user");
+    expect(updatedBody.analysis?.board?.find((square) => square.square === "7f")?.piece).toBeNull();
+    expect(updatedBody.analysis?.board?.find((square) => square.square === "7e")?.piece?.label).toBe("歩");
+    expect(db.updatedGame).toBeNull();
+    expect(db.insertedEvents).toHaveLength(0);
+    expect(db.rowForGame(game.id)?.moves_json).toBe(JSON.stringify(["7g7f"]));
+  });
+
+  it("rejects analysis updates before the game ends", async () => {
+    const game = storedGame({
+      mode: "friend",
+      whiteUserId: "white-user",
+      status: "active",
+    });
+    const db = new FakeD1(game);
+    const room = createRoom(game, db);
+
+    const initial = await room.fetch(
+      new Request("https://game-room/analysis", {
+        method: "GET",
+        headers: { "x-user-id": "black-user" },
+      }),
+    );
+    const initialBody: { error?: { code?: string } } = await initial.json();
+    const snapshot: { game?: { board?: unknown; hands?: unknown } } = await room.fetch(
+      new Request("https://game-room/snapshot", {
+        method: "GET",
+        headers: { "x-user-id": "black-user" },
+      }),
+    ).then((response) => response.json());
+    const response = await room.fetch(
+      new Request("https://game-room/analysis", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-user-id": "black-user",
+        },
+        body: JSON.stringify({
+          requestId: "00000000-0000-4000-8000-000000000302",
+          board: snapshot.game?.board,
+          hands: snapshot.game?.hands,
+        }),
+      }),
+    );
+    const body: { error?: { code?: string } } = await response.json();
+
+    expect(initial.status).toBe(409);
+    expect(initialBody.error?.code).toBe("game_not_ended");
+    expect(response.status).toBe(409);
+    expect(body.error?.code).toBe("game_not_ended");
+  });
 });
 
 function createRoom(game: StoredGame, db: FakeD1): GameRoom {
@@ -835,6 +1017,7 @@ class FakeD1 {
   private readonly games = new Map<string, StoredGame>();
   private readonly users = new Map<string, { id: string; handle: string; display_name: string }>();
   private readonly sessions = new Map<string, { user_id: string; expires_at: string }>();
+  private credentials = 0;
   private readonly duplicateRequests: Set<string>;
 
   constructor(
@@ -987,6 +1170,14 @@ class FakeD1 {
     return this.users.size;
   }
 
+  credentialCount(): number {
+    return this.credentials;
+  }
+
+  insertCredential(): void {
+    this.credentials += 1;
+  }
+
   userForSession(tokenHash: unknown, now: unknown): Record<string, unknown> | null {
     const session = this.sessions.get(String(tokenHash));
     if (!session || session.expires_at <= String(now)) {
@@ -1111,6 +1302,7 @@ class FakeStatement {
       return Promise.resolve({ meta: { changes: 1 }, success: true });
     }
     if (this.sql.includes("INSERT INTO user_credentials")) {
+      this.db.insertCredential();
       return Promise.resolve({ meta: { changes: 1 }, success: true });
     }
     if (this.sql.includes("INSERT INTO user_terms_agreements")) {

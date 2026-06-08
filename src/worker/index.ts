@@ -9,6 +9,7 @@ import {
   authMiddleware,
   currentSession,
   login,
+  loginAsGuest,
   logout,
   register,
   sessionPayload,
@@ -50,6 +51,11 @@ const termsAgreementSchema = z.object({
 const loginSchema = z.object({
   handle: handleSchema,
   password: passwordSchema,
+});
+
+const guestLoginSchema = z.object({
+  termsAccepted: z.literal(true),
+  termsHash: z.string().regex(/^[a-f0-9]{64}$/),
 });
 
 const profileSchema = z.object({
@@ -100,6 +106,12 @@ app.post("/api/auth/login", zValidator("json", loginSchema, validationHook), asy
   ensureSameOrigin(c);
   const user = await login(c, c.req.valid("json"));
   return c.json<SessionPayload>(await sessionPayload(c, user));
+});
+
+app.post("/api/auth/guest", zValidator("json", guestLoginSchema, validationHook), async (c) => {
+  ensureSameOrigin(c);
+  const user = await loginAsGuest(c, c.req.valid("json"));
+  return c.json<SessionPayload>(await sessionPayload(c, user), 201);
 });
 
 app.post("/api/auth/logout", async (c) => {
@@ -171,6 +183,25 @@ app.post("/api/games/:id/resign", zValidator("json", resignSchema, validationHoo
   return callGameRoom(c.env, gameId, c.get("user").id, "/resign", {
     method: "POST",
     body: JSON.stringify(c.req.valid("json")),
+  });
+});
+
+app.get("/api/games/:id/export.kif", async (c) => {
+  const gameId = validGameId(c.req.param("id"));
+  return callGameRoom(c.env, gameId, c.get("user").id, "/export/kif", { method: "GET" });
+});
+
+app.get("/api/games/:id/analysis", async (c) => {
+  const gameId = validGameId(c.req.param("id"));
+  return callGameRoom(c.env, gameId, c.get("user").id, "/analysis", { method: "GET" });
+});
+
+app.post("/api/games/:id/analysis", async (c) => {
+  ensureSameOrigin(c);
+  const gameId = validGameId(c.req.param("id"));
+  return callGameRoom(c.env, gameId, c.get("user").id, "/analysis", {
+    method: "POST",
+    body: JSON.stringify(await c.req.json()),
   });
 });
 

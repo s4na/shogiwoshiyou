@@ -28,6 +28,11 @@ export type LoginInput = {
   password: string;
 };
 
+export type GuestLoginInput = {
+  termsAccepted: true;
+  termsHash: string;
+};
+
 export type ProfileInput = {
   displayName: string;
 };
@@ -137,6 +142,31 @@ export async function register(c: Context<AppEnv>, input: RegisterInput): Promis
   }
 
   const user = { id: userId, handle: normalizedHandle, displayName: normalizedHandle };
+  await createSession(c, user.id);
+  return user;
+}
+
+export async function loginAsGuest(c: Context<AppEnv>, input: GuestLoginInput): Promise<UserSummary> {
+  const expectedTermsHash = await currentTermsHash();
+  if (input.termsHash !== expectedTermsHash) {
+    throw new HttpError(400, "terms_hash_mismatch", "利用規約を再読み込みしてください。");
+  }
+  const now = new Date().toISOString();
+  const userId = crypto.randomUUID();
+  const suffix = crypto.randomUUID().replaceAll("-", "").slice(0, 12);
+  const handle = `guest_${suffix}`;
+  const displayName = `ゲスト${suffix.slice(0, 4)}`;
+  await c.env.DB.batch([
+    c.env.DB.prepare(
+      `INSERT INTO users (id, handle, display_name, created_at)
+       VALUES (?1, ?2, ?3, ?4)`,
+    ).bind(userId, handle, displayName, now),
+    c.env.DB.prepare(
+      `INSERT INTO user_terms_agreements (id, user_id, terms_hash, agreed_at)
+       VALUES (?1, ?2, ?3, ?4)`,
+    ).bind(crypto.randomUUID(), userId, input.termsHash, now),
+  ]);
+  const user = { id: userId, handle, displayName, isGuest: true };
   await createSession(c, user.id);
   return user;
 }
@@ -270,6 +300,7 @@ function toUserSummary(row: UserRow): UserSummary {
     id: row.id,
     handle: row.handle,
     displayName: row.display_name,
+    isGuest: row.handle.startsWith("guest_"),
   };
 }
 

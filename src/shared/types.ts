@@ -29,6 +29,7 @@ export type UserSummary = {
   id: string;
   handle: string;
   displayName: string;
+  isGuest?: boolean;
 };
 
 export type SessionPayload = {
@@ -139,4 +140,18 @@ export type GameEventsResponse = {
 
 export type MoveResponse = {
   game: GameSnapshot;
+};
+
+export type AnalysisSnapshot = {
+  gameId: string;
+  sourceGameVersion: number;
+  revision: number;
+  board: BoardSquare[];
+  hands: Record<PlayerColor, HandPiece[]>;
+  updatedAt: string;
+  updatedBy: UserSummary | null;
+};
+
+export type AnalysisResponse = {
+  analysis: AnalysisSnapshot;
 };
