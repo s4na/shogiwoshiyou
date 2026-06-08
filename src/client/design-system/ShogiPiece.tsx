@@ -44,7 +44,7 @@ export function ShogiPiece({
         cursor: "inherit",
         transform: flipped ? "rotate(180deg)" : "none",
         opacity: dim ? 0.35 : 1,
-        transition: `transform ${MOTION.fast},opacity ${MOTION.normal}`,
+        transition: `opacity ${MOTION.normal}`, // transform は意図的に除外（駒移動時のスピン防止）
         flexShrink: 0,
       }}
     >

@@ -1188,6 +1188,16 @@ function HandRow({
 function HistoryPanel() {
   const t = useTheme();
   const game = activeGame.value;
+  const listRef = useRef<HTMLOListElement>(null);
+
+  // game.id を依存に含め、手数が同じゲームへ切り替えた場合もスクロールを発火させる。
+  // game は signal のオブジェクト置き換えで更新されるため moves.length の変化を検知できる。
+  useEffect(() => {
+    if (listRef.current) {
+      listRef.current.scrollTop = listRef.current.scrollHeight;
+    }
+  }, [game?.id, game?.moves.length]);
+
   return (
     <Card title="棋譜">
       {!game && (
@@ -1201,6 +1211,7 @@ function HistoryPanel() {
             <span style={{ fontFamily: fG, fontSize: 12, color: t.text.secondary }}>{game.moves.length}手</span>
           </div>
           <ol
+            ref={listRef}
             style={{
               listStyle: "none",
               display: "grid",

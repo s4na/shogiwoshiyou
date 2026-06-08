@@ -1,4 +1,4 @@
-import { useState } from "preact/hooks";
+import { useState, useRef, useEffect } from "preact/hooks";
 import {
   DARK,
   LIGHT,
@@ -417,6 +417,159 @@ function PieceGallery() {
   );
 }
 
+// ─── Screen flow mock data ────────────────────────────
+
+type MockPiece = { kanji: string; color: "b" | "w"; promoted?: boolean };
+type BoardGrid = (MockPiece | null)[][];
+const bk = (kanji: string, promoted?: true): MockPiece => promoted ? { kanji, color: "b", promoted } : { kanji, color: "b" };
+const wh = (kanji: string, promoted?: true): MockPiece => promoted ? { kanji, color: "w", promoted } : { kanji, color: "w" };
+const FILES = ["９","８","７","６","５","４","３","２","１"] as const;
+const RANKS = ["一","二","三","四","五","六","七","八","九"] as const;
+
+const BOARD_INITIAL: BoardGrid = [
+  [wh("香"),wh("桂"),wh("銀"),wh("金"),wh("王"),wh("金"),wh("銀"),wh("桂"),wh("香")],
+  [null,    wh("飛"),null,    null,    null,    null,    null,    wh("角"),null   ],
+  [wh("歩"),wh("歩"),wh("歩"),wh("歩"),wh("歩"),wh("歩"),wh("歩"),wh("歩"),wh("歩")],
+  [null,    null,    null,    null,    null,    null,    null,    null,    null   ],
+  [null,    null,    null,    null,    null,    null,    null,    null,    null   ],
+  [null,    null,    null,    null,    null,    null,    null,    null,    null   ],
+  [bk("歩"),bk("歩"),bk("歩"),bk("歩"),bk("歩"),bk("歩"),bk("歩"),bk("歩"),bk("歩")],
+  [null,    bk("角"),null,    null,    null,    null,    null,    bk("飛"),null   ],
+  [bk("香"),bk("桂"),bk("銀"),bk("金"),bk("玉"),bk("金"),bk("銀"),bk("桂"),bk("香")],
+];
+// Mid-game: white played 3三→3四 (col6 row2→row3), black to move
+const BOARD_ACTIVE: BoardGrid = [
+  [wh("香"),wh("桂"),wh("銀"),wh("金"),wh("王"),wh("金"),wh("銀"),wh("桂"),wh("香")],
+  [null,    wh("飛"),null,    null,    null,    null,    null,    wh("角"),null    ],
+  [wh("歩"),wh("歩"),wh("歩"),wh("歩"),wh("歩"),wh("歩"),null,    wh("歩"),wh("歩")],
+  [null,    null,    null,    null,    null,    null,    wh("歩"),null,    null    ],
+  [null,    null,    null,    null,    null,    null,    null,    null,    null    ],
+  [null,    null,    bk("歩"),null,    null,    null,    null,    null,    null    ],
+  [bk("歩"),bk("歩"),null,    bk("歩"),bk("歩"),bk("歩"),bk("歩"),bk("歩"),bk("歩")],
+  [null,    bk("角"),null,    null,    null,    null,    null,    bk("飛"),null    ],
+  [bk("香"),bk("桂"),bk("銀"),bk("金"),bk("玉"),bk("金"),bk("銀"),bk("桂"),bk("香")],
+];
+
+const LAST_FROM: [number, number] = [6, 2];
+const LAST_TO:   [number, number] = [6, 3];
+const SEL_CELL:  [number, number] = [2, 6]; // 7七の歩を選択中
+const LEGAL_MVS: [number, number][] = [[2, 5], [2, 4]];
+
+// ─── Interactive board demo ───────────────────────────
+
+function InteractiveBoardDemo() {
+  const t = useTheme();
+  const [grid, setGrid] = useState<BoardGrid>(() => BOARD_INITIAL.map(row => [...row]));
+  const [selected, setSelected] = useState<[number, number] | null>(null);
+  const [history, setHistory] = useState<{ ply: number; label: string }[]>([]);
+  const listRef = useRef<HTMLOListElement>(null);
+
+  useEffect(() => {
+    if (listRef.current) {
+      listRef.current.scrollTop = listRef.current.scrollHeight;
+    }
+  }, [history.length]);
+
+  function handleCellClick(ci: number, ri: number) {
+    if (selected) {
+      const [sc, sr] = selected;
+      if (sc === ci && sr === ri) {
+        setSelected(null);
+        return;
+      }
+      const srcPiece = grid[sr]?.[sc] ?? null;
+      if (srcPiece) {
+        const newGrid = grid.map(row => [...row]);
+        const targetRow = newGrid[ri];
+        const srcRow = newGrid[sr];
+        if (targetRow && srcRow) {
+          targetRow[ci] = srcPiece;
+          srcRow[sc] = null;
+        }
+        const color = srcPiece.color === "b" ? "▲" : "△";
+        const label = `${color}${FILES[ci] ?? ""}${RANKS[ri] ?? ""}${srcPiece.kanji}`;
+        setGrid(newGrid);
+        setHistory(h => [...h, { ply: h.length + 1, label }]);
+      }
+      setSelected(null);
+    } else if (grid[ri]?.[ci]) {
+      setSelected([ci, ri]);
+    }
+  }
+
+  function reset() {
+    setGrid(BOARD_INITIAL.map(row => [...row]));
+    setSelected(null);
+    setHistory([]);
+  }
+
+  return (
+    <SubSection title="インタラクティブ盤面 — 実際に動かして確認">
+      <p style={{ fontFamily: fG, fontSize: 12, color: t.text.secondary, marginBottom: 12 }}>
+        駒をクリックして選択し、移動先をクリックすると動かせます（将棋ルール無視）
+      </p>
+      <div style={{ display: "flex", gap: 20, flexWrap: "wrap", alignItems: "flex-start" }}>
+        <div>
+          <StaticBoard
+            grid={grid}
+            {...(selected ? { selected } : {})}
+            onCellClick={handleCellClick}
+            cellSize={44}
+          />
+          <div style={{ marginTop: 8, display: "flex", justifyContent: "center" }}>
+            <Btn variant="ghost" size="sm" onClick={reset}>リセット</Btn>
+          </div>
+        </div>
+        <div style={{ minWidth: 160 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+            <span style={{ fontFamily: fG, fontSize: 13, fontWeight: 700, color: t.text.primary }}>棋譜</span>
+            <span style={{ fontFamily: fG, fontSize: 11, color: t.text.tertiary }}>{history.length}手</span>
+          </div>
+          <ol
+            ref={listRef}
+            style={{
+              listStyle: "none",
+              display: "grid",
+              gap: 2,
+              maxHeight: "45svh",
+              overflowY: "auto",
+            }}
+          >
+            {history.length === 0 && (
+              <li style={{ padding: "8px 6px", fontFamily: fG, fontSize: 11, color: t.text.tertiary, textAlign: "center" }}>
+                まだ手がありません
+              </li>
+            )}
+            {history.map((m) => (
+              <li
+                key={m.ply}
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "24px 1fr",
+                  gap: 6,
+                  alignItems: "center",
+                  minHeight: 26,
+                  padding: "3px 6px",
+                  borderBottom: `1px solid ${t.border.subtle}`,
+                  backgroundColor: m.ply === history.length ? t.accent.goldDim : "transparent",
+                  borderRadius: R.sm,
+                }}
+              >
+                <span style={{ fontFamily: fG, fontSize: 10, color: t.text.tertiary, fontVariantNumeric: "tabular-nums" }}>
+                  {m.ply}
+                </span>
+                <code style={{ fontFamily: `"SFMono-Regular",Consolas,monospace`, fontSize: 11, color: t.text.primary }}>
+                  {m.label}
+                </code>
+              </li>
+            ))}
+          </ol>
+        </div>
+      </div>
+    </SubSection>
+  );
+}
+
 // ─── Component sections ───────────────────────────────
 
 function FormControls() {
@@ -546,30 +699,6 @@ function TypographySection() {
   );
 }
 
-// ─── Screen flow mock data ────────────────────────────
-
-type MockPiece = { kanji: string; color: "b" | "w"; promoted?: boolean };
-type BoardGrid = (MockPiece | null)[][];
-const bk = (kanji: string, promoted?: true): MockPiece => promoted ? { kanji, color: "b", promoted } : { kanji, color: "b" };
-const wh = (kanji: string, promoted?: true): MockPiece => promoted ? { kanji, color: "w", promoted } : { kanji, color: "w" };
-
-// Mid-game: white played 3三→3四 (col6 row2→row3), black to move
-const BOARD_ACTIVE: BoardGrid = [
-  [wh("香"),wh("桂"),wh("銀"),wh("金"),wh("王"),wh("金"),wh("銀"),wh("桂"),wh("香")],
-  [null,    wh("飛"),null,    null,    null,    null,    null,    wh("角"),null    ],
-  [wh("歩"),wh("歩"),wh("歩"),wh("歩"),wh("歩"),wh("歩"),null,    wh("歩"),wh("歩")],
-  [null,    null,    null,    null,    null,    null,    wh("歩"),null,    null    ],
-  [null,    null,    null,    null,    null,    null,    null,    null,    null    ],
-  [null,    null,    bk("歩"),null,    null,    null,    null,    null,    null    ],
-  [bk("歩"),bk("歩"),null,    bk("歩"),bk("歩"),bk("歩"),bk("歩"),bk("歩"),bk("歩")],
-  [null,    bk("角"),null,    null,    null,    null,    null,    bk("飛"),null    ],
-  [bk("香"),bk("桂"),bk("銀"),bk("金"),bk("王"),bk("金"),bk("銀"),bk("桂"),bk("香")],
-];
-const LAST_FROM: [number, number] = [6, 2];
-const LAST_TO:   [number, number] = [6, 3];
-const SEL_CELL:  [number, number] = [2, 6]; // 7七の歩を選択中
-const LEGAL_MVS: [number, number][] = [[2, 5], [2, 4]];
-
 // ─── Static board ─────────────────────────────────────
 
 function cellEq(cell: [number, number] | undefined, c: number, r: number): boolean {
@@ -577,7 +706,7 @@ function cellEq(cell: [number, number] | undefined, c: number, r: number): boole
 }
 
 function StaticBoard({
-  grid, selected, lastFrom, lastTo, legalMoves, checkCell, cellSize = 36,
+  grid, selected, lastFrom, lastTo, legalMoves, checkCell, cellSize = 36, onCellClick,
 }: {
   grid: BoardGrid;
   selected?: [number, number];
@@ -586,17 +715,16 @@ function StaticBoard({
   legalMoves?: [number, number][];
   checkCell?: [number, number];
   cellSize?: number;
+  onCellClick?: (ci: number, ri: number) => void;
 }) {
   const t = useTheme();
   const ps = Math.floor(cellSize * 0.76);
   const RW = 18;
-  const files = ["９","８","７","６","５","４","３","２","１"];
-  const ranks = ["一","二","三","四","五","六","七","八","九"];
   const STARS: [number, number][] = [[2,2],[2,5],[5,2],[5,5]];
   return (
     <div style={{ width: "fit-content", margin: "8px auto" }}>
       <div style={{ display: "flex", paddingRight: RW }}>
-        {files.map((n, i) => (
+        {FILES.map((n, i) => (
           <div key={i} style={{ width: cellSize, textAlign: "center", fontFamily: fS, fontSize: Math.max(8, cellSize * 0.22), color: t.board.grid, opacity: 0.8 }}>{n}</div>
         ))}
       </div>
@@ -610,7 +738,7 @@ function StaticBoard({
             const isCheck = cellEq(checkCell, ci, ri);
             const bg = isSel ? t.semantic.selected : isCheck ? t.semantic.check : isLast ? t.semantic.lastMove : isLegal ? t.semantic.legalMove : "transparent";
             return (
-              <div key={`${String(ci)}-${String(ri)}`} style={{ width: cellSize, height: cellSize, display: "flex", alignItems: "center", justifyContent: "center", border: `0.5px solid ${t.board.grid}`, backgroundColor: bg, position: "relative" }}>
+              <div key={`${String(ci)}-${String(ri)}`} onClick={onCellClick ? () => { onCellClick(ci, ri); } : undefined} style={{ width: cellSize, height: cellSize, display: "flex", alignItems: "center", justifyContent: "center", border: `0.5px solid ${t.board.grid}`, backgroundColor: bg, position: "relative", cursor: onCellClick ? "pointer" : "default" }}>
                 {isStar && <div style={{ position: "absolute", top: -2, left: -2, width: 4, height: 4, borderRadius: R.full, backgroundColor: t.board.star }} />}
                 {piece && <ShogiPiece kanji={piece.kanji} size={ps} {...(piece.promoted ? { promoted: true } : {})} flipped={piece.color==="w"} selected={isSel} />}
               </div>
@@ -618,7 +746,7 @@ function StaticBoard({
           }))}
         </div>
         <div style={{ display: "flex", flexDirection: "column", width: RW }}>
-          {ranks.map((n, i) => (
+          {RANKS.map((n, i) => (
             <div key={i} style={{ height: cellSize, display: "flex", alignItems: "center", paddingLeft: 3, fontFamily: fS, fontSize: Math.max(8, cellSize*0.22), color: t.board.grid, opacity: 0.8 }}>{n}</div>
           ))}
         </div>
@@ -912,6 +1040,7 @@ function Showcase({ theme }: { theme: Theme }) {
         <Section title="将棋固有">
           <BoardStates theme={t} />
           <PieceGallery />
+          <InteractiveBoardDemo />
         </Section>
 
         {/* ─── UI Components ─── */}
