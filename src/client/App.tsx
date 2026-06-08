@@ -456,7 +456,7 @@ function AuthScreen() {
 
         {/* Form */}
         <form onSubmit={(event) => void submitAuth(event)} style={{ display: "grid", gap: 16, padding: 24 }}>
-          <FieldGroup id="auth-handle" label="ハンドル" helpId="auth-handle-help" help="3〜24文字。半角英数字と _ のみ。cpu は予約済み。">
+          <FieldGroup id="auth-handle" label="ハンドル" helpId="auth-handle-help" help="3〜24文字。半角英数字と _ のみ。cpu と guest_ で始まるハンドルは予約済み。">
             <Input
               id="auth-handle"
               name="handle"
@@ -1608,6 +1608,7 @@ async function handleAnalysisSquareClick(square: string): Promise<void> {
     const hands = cloneHands(analysis.hands);
     const handPiece = decrementHand(hands[analysisSelectedHand.value.color], analysisSelectedHand.value.type);
     if (!handPiece) return;
+    if (target.piece) return;
     target.piece = {
       color: analysisSelectedHand.value.color,
       type: handPiece.type,
@@ -1635,7 +1636,7 @@ async function handleAnalysisSquareClick(square: string): Promise<void> {
     return;
   }
   const moving = source.piece;
-  source.piece = target.piece;
+  source.piece = null;
   target.piece = moving;
   analysisSelectedSquare.value = null;
   await persistAnalysis(board, cloneHands(analysis.hands));

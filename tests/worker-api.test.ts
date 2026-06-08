@@ -946,6 +946,77 @@ describe("GameRoom moves", () => {
     expect(latestBody.analysis?.board?.find((square) => square.square === "7e")?.piece?.label).toBe("歩");
   });
 
+  it("rejects malformed post-game analysis board and hand payloads", async () => {
+    const game = storedGame({
+      mode: "friend",
+      whiteUserId: "white-user",
+      status: "ended",
+      winnerUserId: "black-user",
+      endReason: "resign",
+      moves: ["7g7f"],
+      sfen: "lnsgkgsnl/1r5b1/ppppppppp/9/9/2P6/PP1PPPPPP/1B5R1/LNSGKGSNL w - 1",
+      currentTurn: "white",
+      version: 2,
+      lastEventSeq: 3,
+    });
+    const db = new FakeD1(game);
+    const room = createRoom(game, db);
+    const initial = await room.fetch(
+      new Request("https://game-room/analysis", {
+        method: "GET",
+        headers: { "x-user-id": "black-user" },
+      }),
+    );
+    const initialBody: {
+      analysis?: {
+        board?: { square: string; file: number; rank: number; piece: unknown }[];
+        hands?: unknown;
+      };
+    } = await initial.json();
+    const duplicateBoard = (initialBody.analysis?.board ?? []).map((square) => ({ ...square }));
+    if (duplicateBoard[0] && duplicateBoard[1]) {
+      duplicateBoard[1].square = duplicateBoard[0].square;
+    }
+
+    const badBoard = await room.fetch(
+      new Request("https://game-room/analysis", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-user-id": "black-user",
+        },
+        body: JSON.stringify({
+          requestId: "00000000-0000-4000-8000-000000000305",
+          baseRevision: 0,
+          board: duplicateBoard,
+          hands: initialBody.analysis?.hands,
+        }),
+      }),
+    );
+    const badBoardBody: { error?: { code?: string } } = await badBoard.json();
+    const badHands = await room.fetch(
+      new Request("https://game-room/analysis", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-user-id": "black-user",
+        },
+        body: JSON.stringify({
+          requestId: "00000000-0000-4000-8000-000000000306",
+          baseRevision: 0,
+          board: initialBody.analysis?.board,
+          hands: { black: [{ type: "pawn", label: "歩", count: 999 }], white: [] },
+        }),
+      }),
+    );
+    const badHandsBody: { error?: { code?: string } } = await badHands.json();
+
+    expect(badBoard.status).toBe(400);
+    expect(badBoardBody.error?.code).toBe("bad_analysis_board");
+    expect(badHands.status).toBe(400);
+    expect(badHandsBody.error?.code).toBe("bad_analysis_hands");
+  });
+
   it("rejects analysis updates before the game ends", async () => {
     const game = storedGame({
       mode: "friend",

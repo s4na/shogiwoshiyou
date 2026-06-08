@@ -1,6 +1,7 @@
 import type {
   AnalysisResponse,
   AnalysisSnapshot,
+  BoardPiece,
   BoardSquare,
   GameResponse,
   HandPiece,
@@ -32,6 +33,24 @@ type GameEventType =
 
 const CPU_USER_ID = "cpu-basic";
 const CPU_MOVE_DELAY_MS = 800;
+const PIECE_TYPES = new Set([
+  "pawn",
+  "lance",
+  "knight",
+  "silver",
+  "gold",
+  "bishop",
+  "rook",
+  "king",
+  "promPawn",
+  "promLance",
+  "promKnight",
+  "promSilver",
+  "horse",
+  "dragon",
+]);
+const HAND_PIECE_TYPES = new Set(["pawn", "lance", "knight", "silver", "gold", "bishop", "rook"]);
+const COLORS = new Set(["black", "white"]);
 
 type MoveRequest = {
   usi: string;
@@ -781,11 +800,36 @@ function validateAnalysisBoard(value: unknown): BoardSquare[] {
   if (!Array.isArray(value) || value.length !== 81) {
     throw new RoomError(400, "bad_analysis_board", "感想戦の盤面が不正です。");
   }
-  return value.map((square) => {
-    if (!isRecord(square) || typeof square.square !== "string") {
+  const seen = new Set<string>();
+  const squares: unknown[] = value;
+  return squares.map((square) => {
+    if (!isRecord(square)) {
       throw new RoomError(400, "bad_analysis_board", "感想戦の盤面が不正です。");
     }
-    return square as BoardSquare;
+    const file = square.file;
+    const rank = square.rank;
+    if (
+      typeof square.square !== "string" ||
+      !/^[1-9][a-i]$/.test(square.square) ||
+      typeof file !== "number" ||
+      !Number.isInteger(file) ||
+      typeof rank !== "number" ||
+      !Number.isInteger(rank) ||
+      file < 1 ||
+      file > 9 ||
+      rank < 1 ||
+      rank > 9 ||
+      seen.has(square.square)
+    ) {
+      throw new RoomError(400, "bad_analysis_board", "感想戦の盤面が不正です。");
+    }
+    seen.add(square.square);
+    return {
+      square: square.square,
+      file,
+      rank,
+      piece: square.piece === null ? null : validateBoardPiece(square.piece),
+    };
   });
 }
 
@@ -794,9 +838,60 @@ function validateAnalysisHands(value: unknown): Record<PlayerColor, HandPiece[]>
     throw new RoomError(400, "bad_analysis_hands", "感想戦の持駒が不正です。");
   }
   return {
-    black: value.black as HandPiece[],
-    white: value.white as HandPiece[],
+    black: validateHandPieces(value.black),
+    white: validateHandPieces(value.white),
   };
+}
+
+function validateBoardPiece(value: unknown): BoardPiece {
+  if (
+    !isRecord(value) ||
+    typeof value.color !== "string" ||
+    !COLORS.has(value.color) ||
+    typeof value.type !== "string" ||
+    !PIECE_TYPES.has(value.type) ||
+    typeof value.label !== "string" ||
+    value.label.length < 1 ||
+    value.label.length > 2
+  ) {
+    throw new RoomError(400, "bad_analysis_piece", "感想戦の駒が不正です。");
+  }
+  return {
+    color: value.color as PlayerColor,
+    type: value.type as BoardPiece["type"],
+    label: value.label,
+  };
+}
+
+function validateHandPieces(value: unknown[]): HandPiece[] {
+  if (value.length > HAND_PIECE_TYPES.size) {
+    throw new RoomError(400, "bad_analysis_hands", "感想戦の持駒が不正です。");
+  }
+  const seen = new Set<string>();
+  return value.map((piece) => {
+    const count = isRecord(piece) ? piece.count : null;
+    if (
+      !isRecord(piece) ||
+      typeof piece.type !== "string" ||
+      !HAND_PIECE_TYPES.has(piece.type) ||
+      seen.has(piece.type) ||
+      typeof piece.label !== "string" ||
+      piece.label.length < 1 ||
+      piece.label.length > 2 ||
+      typeof count !== "number" ||
+      !Number.isInteger(count) ||
+      count < 1 ||
+      count > 18
+    ) {
+      throw new RoomError(400, "bad_analysis_hands", "感想戦の持駒が不正です。");
+    }
+    seen.add(piece.type);
+    return {
+      type: piece.type as HandPiece["type"],
+      label: piece.label,
+      count,
+    };
+  });
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
