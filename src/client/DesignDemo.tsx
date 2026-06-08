@@ -960,7 +960,10 @@ function MockBoardPanel({ gameState }: { gameState: "my-turn"|"cpu-thinking"|"wo
           {gameState==="my-turn" && <Btn variant="danger" size="sm">投了</Btn>}
         </div>
       </div>
-      <MockHand side="white" pieces={gameState==="won" ? [{ kanji:"歩", count:2 }] : []} />
+      <MockHand side="white" pieces={
+        gameState==="won" ? [{ kanji:"歩", count:3 }, { kanji:"銀", count:1 }] :
+        gameState!=="waiting" ? [{ kanji:"歩", count:2 }] : []
+      } />
       <StaticBoard
         grid={BOARD_ACTIVE}
         {...(gameState==="my-turn" ? { selected: SEL_CELL, legalMoves: LEGAL_MVS } : {})}
@@ -969,7 +972,9 @@ function MockBoardPanel({ gameState }: { gameState: "my-turn"|"cpu-thinking"|"wo
         lastTo={LAST_TO}
         cellSize={28}
       />
-      <MockHand side="black" pieces={gameState!=="waiting" ? [{ kanji:"歩", count:1 }] : []} />
+      <MockHand side="black" pieces={
+        gameState!=="waiting" ? [{ kanji:"歩", count:4 }, { kanji:"香", count:1 }, { kanji:"角", count:1 }] : []
+      } />
     </div>
   );
 }
@@ -990,10 +995,10 @@ function MockHistoryPanel() {
         <span style={{ fontFamily: fG, fontSize: 10, color: t.text.tertiary, fontVariantNumeric: "tabular-nums" }}>{MOCK_MOVES.length}手</span>
       </div>
       <div style={{ padding: "8px 12px" }}>
-        <ol style={{ listStyle: "none", display: "grid", gap: 1, maxHeight: 280, overflowY: "auto" }}>
+        <ol style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 1, maxHeight: 280, overflowY: "auto" }}>
           {MOCK_MOVES.map((m) => (
             <li key={m.ply} style={{ display: "flex", alignItems: "center", gap: 6, padding: "2px 4px", borderRadius: R.sm, backgroundColor: m.ply===MOCK_MOVES.length ? t.accent.goldDim : "transparent" }}>
-              <span style={{ fontFamily: fG, fontSize: 9, color: t.text.tertiary, fontVariantNumeric: "tabular-nums", minWidth: 18, textAlign: "right", flexShrink: 0 }}>{m.ply}</span>
+              <span style={{ fontFamily: fG, fontSize: 9, color: t.text.tertiary, fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>{m.ply}</span>
               <code style={{ fontFamily: `"SFMono-Regular",Consolas,monospace`, fontSize: 11, color: t.text.secondary }}>{m.usi}</code>
             </li>
           ))}
@@ -1025,20 +1030,36 @@ function ScreenFlows() {
       <ScreenFrame label="① 認証画面（新規登録タブ）">
         <AppHeaderMock />
         <div style={{ backgroundColor: t.bg.primary, padding: "32px 24px", display: "flex", justifyContent: "center" }}>
-          <div style={{ width: "min(380px,100%)", backgroundColor: t.bg.elevated, borderRadius: R.xl, border: `1px solid ${t.border.default}`, boxShadow: t.shadow.lg, overflow: "hidden" }}>
+          <div style={{ width: "min(400px,100%)", backgroundColor: t.bg.elevated, borderRadius: R.xl, border: `1px solid ${t.border.default}`, boxShadow: t.shadow.lg, overflow: "hidden" }}>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", borderBottom: `1px solid ${t.border.subtle}` }}>
               {(["新規登録","ログイン"] as const).map((lb, i) => (
                 <div key={lb} style={{ padding: "14px", fontFamily: fG, fontSize: 13, fontWeight: 600, textAlign: "center", color: i===0 ? t.accent.gold : t.text.tertiary, borderBottom: `2px solid ${i===0 ? t.accent.gold : "transparent"}` }}>{lb}</div>
               ))}
             </div>
             <div style={{ display: "grid", gap: 16, padding: 24 }}>
-              <FieldGroup id="sf-h" label="ハンドル" help="3〜24文字。半角英数字と _ のみ。cpu は予約済み。">
+              <FieldGroup id="sf-h" label="ハンドル" help="3〜24文字。半角英数字と _ のみ。cpu は使用できません。guest_ で始まるハンドルも予約済みです。">
                 <Input id="sf-h" placeholder="例: shogi_master" />
               </FieldGroup>
               <FieldGroup id="sf-p" label="パスワード" help="8〜128文字。個人情報は登録しません。">
                 <Input id="sf-p" type="password" placeholder="••••••••" />
               </FieldGroup>
+              <div style={{ display: "grid", gap: 8 }}>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 10, minHeight: 48, paddingTop: 6 }}>
+                  <input id="sf-terms" type="checkbox" style={{ width: 18, height: 18, marginTop: 7, accentColor: t.accent.gold, flexShrink: 0 }} />
+                  <div style={{ color: t.text.secondary, fontFamily: fG, fontSize: 13, lineHeight: 1.6, padding: "4px 0 10px" }}>
+                    <label for="sf-terms">利用規約に同意します。</label>
+                    <div><a href="/terms" style={{ color: t.accent.gold, fontWeight: 700 }}>利用規約を読む</a></div>
+                  </div>
+                </div>
+              </div>
               <Btn variant="primary" size="lg" full>登録して始める</Btn>
+            </div>
+            <div style={{ display: "grid", gap: 12, padding: "0 24px 24px", borderTop: `1px solid ${t.border.subtle}` }}>
+              <label style={{ display: "flex", gap: 10, alignItems: "flex-start", color: t.text.secondary, fontFamily: fG, fontSize: 12, lineHeight: 1.6, paddingTop: 16 }}>
+                <input type="checkbox" style={{ width: 16, height: 16, marginTop: 3, accentColor: t.accent.gold, flexShrink: 0 }} />
+                <span>利用規約に同意して、保存用パスワードなしのゲストとして入ります。{" "}<a href="/terms" style={{ color: t.accent.gold, fontWeight: 700 }}>利用規約を読む</a></span>
+              </label>
+              <Btn variant="secondary" size="md" full>ゲストとしてログイン</Btn>
             </div>
           </div>
         </div>

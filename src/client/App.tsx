@@ -1494,7 +1494,7 @@ function HistoryPanel() {
         {game && (
           <ol
             ref={listRef}
-            style={{ listStyle: "none", display: "grid", gap: 1, maxHeight: "45svh", overflowY: "auto" }}
+            style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 1, maxHeight: "45svh", overflowY: "auto" }}
           >
             {game.moves.map((move) => (
               <li
@@ -1514,8 +1514,6 @@ function HistoryPanel() {
                     fontSize: 9,
                     color: t.text.tertiary,
                     fontVariantNumeric: "tabular-nums",
-                    minWidth: 18,
-                    textAlign: "right",
                     flexShrink: 0,
                   }}
                 >
