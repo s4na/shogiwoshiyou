@@ -993,7 +993,7 @@ function MockHistoryPanel() {
         <ol style={{ listStyle: "none", display: "grid", gap: 1, maxHeight: 280, overflowY: "auto" }}>
           {MOCK_MOVES.map((m) => (
             <li key={m.ply} style={{ display: "flex", alignItems: "center", gap: 6, padding: "2px 4px", borderRadius: R.sm, backgroundColor: m.ply===MOCK_MOVES.length ? t.accent.goldDim : "transparent" }}>
-              <span style={{ fontFamily: fG, fontSize: 9, color: t.text.tertiary, fontVariantNumeric: "tabular-nums", minWidth: 18, textAlign: "right", flexShrink: 0 }}>{m.ply}</span>
+              <span style={{ fontFamily: fG, fontSize: 9, color: t.text.tertiary, fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>{m.ply}</span>
               <code style={{ fontFamily: `"SFMono-Regular",Consolas,monospace`, fontSize: 11, color: t.text.secondary }}>{m.usi}</code>
             </li>
           ))}

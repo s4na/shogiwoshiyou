@@ -1514,8 +1514,6 @@ function HistoryPanel() {
                     fontSize: 9,
                     color: t.text.tertiary,
                     fontVariantNumeric: "tabular-nums",
-                    minWidth: 18,
-                    textAlign: "right",
                     flexShrink: 0,
                   }}
                 >
