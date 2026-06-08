@@ -770,7 +770,6 @@ function ModeSelectScreen() {
             fontSize: 13,
             fontWeight: 700,
             letterSpacing: "0.06em",
-            textTransform: "uppercase",
             color: t.accent.gold,
           }}
         >
@@ -832,7 +831,7 @@ function ModeCard({
         gap: 16,
         padding: 20,
         borderRadius: R.lg,
-        border: `${selected ? "2px" : "1px"} solid ${selected ? accent : t.border.default}`,
+        border: `2px solid ${selected ? accent : t.border.default}`,
         backgroundColor: selected ? t.bg.elevated : t.bg.secondary,
         boxShadow: selected ? `${t.shadow.md}, 0 0 0 3px ${accent}22` : t.shadow.sm,
         cursor: "pointer",
@@ -874,7 +873,7 @@ function ModeCard({
               display: "grid",
               placeItems: "center",
               borderRadius: R.full,
-              border: `${selected ? "2px" : "1px"} solid ${selected ? accent : t.border.default}`,
+              border: `2px solid ${selected ? accent : t.border.default}`,
               color: selected ? accent : t.text.tertiary,
               fontFamily: fG,
               fontSize: 15,
@@ -918,7 +917,6 @@ function ModeCard({
         full
         type={selected ? "submit" : "button"}
         disabled={busy.value}
-        onClick={() => { if (!selected) { gameMode.value = mode; } }}
       >
         {mode === "cpu" ? "CPUと始める" : "合言葉で待ち合わせる"}
       </Btn>

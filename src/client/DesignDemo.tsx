@@ -828,7 +828,7 @@ function MockGameListPanel({ showWaiting }: { showWaiting?: boolean }) {
     <div style={{ backgroundColor: t.bg.elevated, borderRadius: R.lg, border: `1px solid ${t.border.default}`, padding: 14 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
         <h2 style={{ fontFamily: fS, fontSize: 15, fontWeight: 700, color: t.text.primary }}>戦闘モード</h2>
-        <Btn variant="ghost" size="sm">モード選択へ戻る</Btn>
+        <Btn variant="secondary" size="sm">← モード選択へ</Btn>
       </div>
       <div style={{ display: "grid", gap: 10, marginBottom: 12 }}>
         <Btn variant="secondary" size="sm">対局一覧を更新</Btn>
@@ -855,18 +855,18 @@ function MockModeCard({ mode, selected }: { mode: "cpu"|"friend"; selected?: boo
   const t = useTheme();
   const accent = mode==="cpu" ? t.accent.gold : t.accent.jade;
   return (
-    <div style={{ display: "grid", alignContent: "space-between", gap: 16, padding: 18, borderRadius: R.lg, border: `${selected ? "2px" : "1px"} solid ${selected ? accent : t.border.default}`, backgroundColor: selected ? t.bg.elevated : t.bg.secondary, boxShadow: selected ? `${t.shadow.md}, 0 0 0 3px ${accent}22` : t.shadow.sm }}>
+    <div style={{ display: "grid", alignContent: "space-between", gap: 16, padding: 18, borderRadius: R.lg, border: `2px solid ${selected ? accent : t.border.default}`, backgroundColor: selected ? t.bg.elevated : t.bg.secondary, boxShadow: selected ? `${t.shadow.md}, 0 0 0 3px ${accent}22` : t.shadow.sm }}>
       <div style={{ display: "grid", gap: 10 }}>
         <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, color: t.text.primary, cursor: "pointer" }}>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
             <input type="radio" readOnly checked={Boolean(selected)} name="mock-mode" style={{ accentColor: accent }} />
             <span style={{ fontFamily: fS, fontSize: 20, fontWeight: 800 }}>{mode==="cpu" ? "CPU対戦" : "友達対戦"}</span>
           </span>
-          <span aria-hidden="true" style={{ width: 36, height: 36, display: "grid", placeItems: "center", borderRadius: R.full, border: `${selected ? "2px" : "1px"} solid ${selected ? accent : t.border.default}`, color: selected ? accent : t.text.tertiary, fontFamily: fG, fontSize: 15, fontWeight: 900 }}>
+          <span aria-hidden="true" style={{ width: 36, height: 36, display: "grid", placeItems: "center", borderRadius: R.full, border: `2px solid ${selected ? accent : t.border.default}`, color: selected ? accent : t.text.tertiary, fontFamily: fG, fontSize: 15, fontWeight: 900 }}>
             {mode==="cpu" ? "歩" : "対"}
           </span>
         </label>
-        <p style={{ fontFamily: fG, fontSize: 13, lineHeight: 1.7, color: t.text.secondary }}>
+        <p style={{ fontFamily: fG, fontSize: 14, lineHeight: 1.8, color: t.text.secondary }}>
           {mode==="cpu"
             ? "すぐに一局始めます。相手待ちなしで、ログイン後の肩慣らしに向いています。"
             : "合言葉で待ち合わせます。同じ合言葉を入れた相手が参加すると対局が始まります。"}
@@ -895,9 +895,9 @@ function MockModeSelectScreen() {
   return (
     <div style={{ backgroundColor: t.bg.primary, padding: "22px 24px 34px", display: "grid", gap: 18 }}>
       <section style={{ display: "grid", gap: 6, borderBottom: `1px solid ${t.border.subtle}`, paddingBottom: 20 }}>
-        <p style={{ fontFamily: fG, fontSize: 13, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: t.accent.gold }}>モード選択</p>
+        <p style={{ fontFamily: fG, fontSize: 13, fontWeight: 700, letterSpacing: "0.06em", color: t.accent.gold }}>モード選択</p>
         <h2 style={{ fontFamily: fS, fontSize: 24, fontWeight: 700, color: t.text.primary }}>今日はどう指しますか</h2>
-        <p style={{ fontFamily: fG, fontSize: 13, lineHeight: 1.7, color: t.text.secondary }}>新しく始めるか、途中または最近の対局に戻るかを選んでから盤面へ進みます。</p>
+        <p style={{ fontFamily: fG, fontSize: 14, lineHeight: 1.8, color: t.text.secondary }}>新しく始めるか、途中または最近の対局に戻るかを選んでから盤面へ進みます。</p>
       </section>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
         <MockModeCard mode="cpu" selected />
