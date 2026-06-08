@@ -963,29 +963,34 @@ function PlayScreen() {
 // ─── Game list panel ──────────────────────────────────
 function GameListPanel() {
   const t = useTheme();
+  const inBattle = activeGame.value?.status === "active";
   return (
     <Card>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: inBattle ? 0 : 16 }}>
         <h2 style={{ fontFamily: fS, fontSize: 16, fontWeight: 700, color: t.text.primary }}>戦闘モード</h2>
         <Btn variant="secondary" size="sm" onClick={() => { returnToModeSelect(); }} disabled={busy.value}>
           ← モード選択へ
         </Btn>
       </div>
 
-      <div style={{ display: "grid", gap: 10, marginBottom: 14 }}>
-        <Btn variant="secondary" size="sm" onClick={() => void refreshGames()} disabled={busy.value}>
-          対局一覧を更新
-        </Btn>
-      </div>
+      {!inBattle && (
+        <>
+          <div style={{ display: "grid", gap: 10, marginBottom: 14 }}>
+            <Btn variant="secondary" size="sm" onClick={() => void refreshGames()} disabled={busy.value}>
+              対局一覧を更新
+            </Btn>
+          </div>
 
-      <div style={{ display: "grid", gap: 6 }}>
-        {games.value.length === 0 && (
-          <p style={{ fontFamily: fG, fontSize: 13, color: t.text.tertiary, textAlign: "center", padding: "16px 0" }}>
-            まだ対局はありません
-          </p>
-        )}
-        <GameList onSelect={(gameId) => void selectGame(gameId)} />
-      </div>
+          <div style={{ display: "grid", gap: 6 }}>
+            {games.value.length === 0 && (
+              <p style={{ fontFamily: fG, fontSize: 13, color: t.text.tertiary, textAlign: "center", padding: "16px 0" }}>
+                まだ対局はありません
+              </p>
+            )}
+            <GameList onSelect={(gameId) => void selectGame(gameId)} />
+          </div>
+        </>
+      )}
     </Card>
   );
 }
