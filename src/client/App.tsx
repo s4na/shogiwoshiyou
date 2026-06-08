@@ -917,7 +917,7 @@ function ModeCard({
         full
         type={selected ? "submit" : "button"}
         disabled={busy.value}
-        onClick={selected ? undefined : () => { gameMode.value = mode; }}
+        onClick={() => { gameMode.value = mode; }}
       >
         {mode === "cpu" ? "CPUと始める" : "合言葉で待ち合わせる"}
       </Btn>
