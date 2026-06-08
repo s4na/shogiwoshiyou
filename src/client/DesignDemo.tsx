@@ -984,19 +984,21 @@ const MOCK_MOVES = [
 function MockHistoryPanel() {
   const t = useTheme();
   return (
-    <div style={{ backgroundColor: t.bg.elevated, borderRadius: R.lg, border: `1px solid ${t.border.default}`, padding: 14 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-        <h2 style={{ fontFamily: fS, fontSize: 15, fontWeight: 700, color: t.text.primary }}>棋譜</h2>
-        <span style={{ fontFamily: fG, fontSize: 12, color: t.text.secondary }}>{MOCK_MOVES.length}手</span>
+    <div style={{ backgroundColor: t.bg.secondary, borderRadius: R.lg, border: `1px solid ${t.border.subtle}`, overflow: "hidden" }}>
+      <div style={{ padding: "8px 12px", borderBottom: `1px solid ${t.border.subtle}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <span style={{ fontFamily: fG, fontSize: 11, fontWeight: 600, color: t.text.tertiary, letterSpacing: "0.04em" }}>棋譜</span>
+        <span style={{ fontFamily: fG, fontSize: 10, color: t.text.tertiary, fontVariantNumeric: "tabular-nums" }}>{MOCK_MOVES.length}手</span>
       </div>
-      <ol style={{ listStyle: "none", display: "grid", gap: 2, maxHeight: 280, overflowY: "auto" }}>
-        {MOCK_MOVES.map((m) => (
-          <li key={m.ply} style={{ display: "grid", gridTemplateColumns: "26px 1fr", gap: 8, alignItems: "center", minHeight: 26, padding: "3px 6px", borderBottom: `1px solid ${t.border.subtle}`, backgroundColor: m.ply===MOCK_MOVES.length ? t.accent.goldDim : "transparent", borderRadius: R.sm }}>
-            <span style={{ fontFamily: fG, fontSize: 10, color: t.text.tertiary, fontVariantNumeric: "tabular-nums" }}>{m.ply}</span>
-            <code style={{ fontFamily: `"SFMono-Regular",Consolas,monospace`, fontSize: 11, color: t.text.primary }}>{m.usi}</code>
-          </li>
-        ))}
-      </ol>
+      <div style={{ padding: "8px 12px" }}>
+        <ol style={{ listStyle: "none", display: "grid", gap: 1, maxHeight: 280, overflowY: "auto" }}>
+          {MOCK_MOVES.map((m) => (
+            <li key={m.ply} style={{ display: "flex", alignItems: "center", gap: 6, padding: "2px 4px", borderRadius: R.sm, backgroundColor: m.ply===MOCK_MOVES.length ? t.accent.goldDim : "transparent" }}>
+              <span style={{ fontFamily: fG, fontSize: 9, color: t.text.tertiary, fontVariantNumeric: "tabular-nums", minWidth: 18, textAlign: "right", flexShrink: 0 }}>{m.ply}</span>
+              <code style={{ fontFamily: `"SFMono-Regular",Consolas,monospace`, fontSize: 11, color: t.text.secondary }}>{m.usi}</code>
+            </li>
+          ))}
+        </ol>
+      </div>
     </div>
   );
 }
@@ -1006,7 +1008,7 @@ function MockHistoryPanel() {
 function PlayScreenMock({ gameState }: { gameState: "my-turn"|"cpu-thinking"|"won"|"waiting" }) {
   return (
     <div style={{ display: "grid", gridTemplateColumns: "180px 290px 140px", gap: 12, alignItems: "start", minWidth: 634 }}>
-      <MockGameListPanel showWaiting={gameState==="waiting"} inBattle={gameState==="my-turn" || gameState==="cpu-thinking"} />
+      <MockGameListPanel showWaiting={gameState==="waiting"} inBattle={gameState==="my-turn" || gameState==="cpu-thinking" || gameState==="won"} />
       <MockBoardPanel gameState={gameState} />
       <MockHistoryPanel />
     </div>

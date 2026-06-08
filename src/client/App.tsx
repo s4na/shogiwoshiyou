@@ -964,7 +964,7 @@ function PlayScreen() {
 // ─── Game list panel ──────────────────────────────────
 function GameListPanel() {
   const t = useTheme();
-  const inBattle = activeGame.value?.status === "active";
+  const inBattle = activeGame.value?.status === "active" || activeGame.value?.status === "ended";
 
   if (inBattle) {
     return (
@@ -1458,48 +1458,65 @@ function HistoryPanel() {
   }, [game?.id, game?.moves.length]);
 
   return (
-    <Card title="棋譜">
-      {!game && (
-        <p style={{ fontFamily: fG, fontSize: 13, color: t.text.tertiary, textAlign: "center", padding: 8 }}>
-          対局未選択
-        </p>
-      )}
-      {game && (
-        <>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-            <span style={{ fontFamily: fG, fontSize: 12, color: t.text.secondary }}>{game.moves.length}手</span>
-          </div>
+    <div
+      style={{
+        backgroundColor: t.bg.secondary,
+        borderRadius: R.lg,
+        border: `1px solid ${t.border.subtle}`,
+        overflow: "hidden",
+      }}
+    >
+      <div
+        style={{
+          padding: "8px 12px",
+          borderBottom: `1px solid ${t.border.subtle}`,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+        }}
+      >
+        <span style={{ fontFamily: fG, fontSize: 11, fontWeight: 600, color: t.text.tertiary, letterSpacing: "0.04em" }}>
+          棋譜
+        </span>
+        {game && (
+          <span style={{ fontFamily: fG, fontSize: 10, color: t.text.tertiary, fontVariantNumeric: "tabular-nums" }}>
+            {game.moves.length}手
+          </span>
+        )}
+      </div>
+
+      <div style={{ padding: "8px 12px" }}>
+        {!game && (
+          <p style={{ fontFamily: fG, fontSize: 12, color: t.text.tertiary, textAlign: "center", padding: "8px 0" }}>
+            対局未選択
+          </p>
+        )}
+        {game && (
           <ol
             ref={listRef}
-            style={{
-              listStyle: "none",
-              display: "grid",
-              gap: 2,
-              maxHeight: "45svh",
-              overflowY: "auto",
-            }}
+            style={{ listStyle: "none", display: "grid", gap: 1, maxHeight: "45svh", overflowY: "auto" }}
           >
             {game.moves.map((move) => (
               <li
                 key={move.ply}
                 style={{
-                  display: "grid",
-                  gridTemplateColumns: "28px 1fr",
-                  gap: 8,
+                  display: "flex",
                   alignItems: "center",
-                  minHeight: 28,
-                  padding: "3px 6px",
-                  borderBottom: `1px solid ${t.border.subtle}`,
-                  backgroundColor: move.ply === game.moves.length ? t.accent.goldDim : "transparent",
+                  gap: 6,
+                  padding: "2px 4px",
                   borderRadius: R.sm,
+                  backgroundColor: move.ply === game.moves.length ? t.accent.goldDim : "transparent",
                 }}
               >
                 <span
                   style={{
                     fontFamily: fG,
-                    fontSize: 10,
+                    fontSize: 9,
                     color: t.text.tertiary,
                     fontVariantNumeric: "tabular-nums",
+                    minWidth: 18,
+                    textAlign: "right",
+                    flexShrink: 0,
                   }}
                 >
                   {move.ply}
@@ -1509,7 +1526,7 @@ function HistoryPanel() {
                   style={{
                     fontFamily: `"SFMono-Regular", Consolas, monospace`,
                     fontSize: 11,
-                    color: t.text.primary,
+                    color: t.text.secondary,
                   }}
                 >
                   {moveNotationLabel(move)}
@@ -1517,32 +1534,22 @@ function HistoryPanel() {
               </li>
             ))}
           </ol>
-        </>
-      )}
+        )}
 
-      {events.value.length > 0 && (
-        <div style={{ marginTop: 12, borderTop: `1px solid ${t.border.subtle}`, paddingTop: 8 }}>
-          <p style={{ fontFamily: fG, fontSize: 10, color: t.text.tertiary, marginBottom: 6 }}>イベント</p>
-          {events.value.slice(-6).map((event) => (
-            <p
-              key={event.id}
-              style={{
-                display: "grid",
-                gridTemplateColumns: "32px 1fr",
-                gap: 6,
-                fontFamily: fG,
-                fontSize: 10,
-                color: t.text.tertiary,
-                marginBottom: 2,
-              }}
-            >
-              <span>{event.seq}</span>
-              <span>{event.type}</span>
-            </p>
-          ))}
-        </div>
-      )}
-    </Card>
+        {events.value.length > 0 && (
+          <div style={{ marginTop: 8, borderTop: `1px solid ${t.border.subtle}`, paddingTop: 6 }}>
+            {events.value.slice(-6).map((event) => (
+              <p
+                key={event.id}
+                style={{ fontFamily: fG, fontSize: 9, color: t.text.tertiary, marginBottom: 2 }}
+              >
+                {event.seq} {event.type}
+              </p>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
