@@ -253,6 +253,42 @@ describe("auth API", () => {
     expect(db.termsAgreements).toHaveLength(0);
   });
 
+  it("reserves the guest handle prefix for generated guest accounts", async () => {
+    const db = new FakeD1(null);
+    const env = {
+      DB: db as unknown as D1Database,
+      GAME_ROOM: new FakeGameRoomNamespace(db) as unknown as DurableObjectNamespace,
+      SESSION_COOKIE_NAME: "sid",
+    } satisfies Env;
+    const origin = "http://localhost";
+    const userCountBefore = db.userCount();
+
+    const response = await app.request(
+      `${origin}/api/auth/register`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          origin,
+        },
+        body: JSON.stringify({
+          handle: "guest_named",
+          password: "password123",
+          termsAccepted: true,
+          termsHash: CURRENT_TERMS_HASH,
+        }),
+      },
+      env,
+    );
+    const body: { error?: { code?: string } } = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(body.error?.code).toBe("handle_reserved");
+    expect(response.headers.get("set-cookie")).toBeNull();
+    expect(db.userCount()).toBe(userCountBefore);
+    expect(db.credentialCount()).toBe(0);
+  });
+
   it("creates a guest session without storing password credentials", async () => {
     const db = new FakeD1(null);
     const env = {
@@ -797,6 +833,7 @@ describe("GameRoom moves", () => {
         },
         body: JSON.stringify({
           requestId: "00000000-0000-4000-8000-000000000301",
+          baseRevision: 0,
           board,
           hands: initialBody.analysis?.hands,
         }),
@@ -820,6 +857,93 @@ describe("GameRoom moves", () => {
     expect(db.updatedGame).toBeNull();
     expect(db.insertedEvents).toHaveLength(0);
     expect(db.rowForGame(game.id)?.moves_json).toBe(JSON.stringify(["7g7f"]));
+  });
+
+  it("rejects stale post-game analysis updates instead of overwriting a newer board", async () => {
+    const game = storedGame({
+      mode: "friend",
+      whiteUserId: "white-user",
+      status: "ended",
+      winnerUserId: "black-user",
+      endReason: "resign",
+      moves: ["7g7f"],
+      sfen: "lnsgkgsnl/1r5b1/ppppppppp/9/9/2P6/PP1PPPPPP/1B5R1/LNSGKGSNL w - 1",
+      currentTurn: "white",
+      version: 2,
+      lastEventSeq: 3,
+    });
+    const db = new FakeD1(game);
+    const room = createRoom(game, db);
+    const initial = await room.fetch(
+      new Request("https://game-room/analysis", {
+        method: "GET",
+        headers: { "x-user-id": "black-user" },
+      }),
+    );
+    const initialBody: {
+      analysis?: { board?: { square: string; piece: unknown }[]; hands?: unknown };
+    } = await initial.json();
+    const firstBoard = (initialBody.analysis?.board ?? []).map((square) => ({ ...square }));
+    const firstFrom = firstBoard.find((square) => square.square === "7f");
+    const firstTo = firstBoard.find((square) => square.square === "7e");
+    expect(firstFrom?.piece).toBeTruthy();
+    expect(firstTo).toBeTruthy();
+    if (firstFrom && firstTo) {
+      firstTo.piece = firstFrom.piece;
+      firstFrom.piece = null;
+    }
+    const first = await room.fetch(
+      new Request("https://game-room/analysis", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-user-id": "black-user",
+        },
+        body: JSON.stringify({
+          requestId: "00000000-0000-4000-8000-000000000303",
+          baseRevision: 0,
+          board: firstBoard,
+          hands: initialBody.analysis?.hands,
+        }),
+      }),
+    );
+    const stale = await room.fetch(
+      new Request("https://game-room/analysis", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-user-id": "white-user",
+        },
+        body: JSON.stringify({
+          requestId: "00000000-0000-4000-8000-000000000304",
+          baseRevision: 0,
+          board: initialBody.analysis?.board,
+          hands: initialBody.analysis?.hands,
+        }),
+      }),
+    );
+    const staleBody: { error?: { code?: string } } = await stale.json();
+    const latest = await room.fetch(
+      new Request("https://game-room/analysis", {
+        method: "GET",
+        headers: { "x-user-id": "white-user" },
+      }),
+    );
+    const latestBody: {
+      analysis?: {
+        board?: { square: string; piece: { label?: string } | null }[];
+        revision?: number;
+        updatedBy?: { id?: string };
+      };
+    } = await latest.json();
+
+    expect(first.status).toBe(200);
+    expect(stale.status).toBe(409);
+    expect(staleBody.error?.code).toBe("analysis_revision_conflict");
+    expect(latestBody.analysis?.revision).toBe(1);
+    expect(latestBody.analysis?.updatedBy?.id).toBe("black-user");
+    expect(latestBody.analysis?.board?.find((square) => square.square === "7f")?.piece).toBeNull();
+    expect(latestBody.analysis?.board?.find((square) => square.square === "7e")?.piece?.label).toBe("歩");
   });
 
   it("rejects analysis updates before the game ends", async () => {
@@ -853,6 +977,7 @@ describe("GameRoom moves", () => {
         },
         body: JSON.stringify({
           requestId: "00000000-0000-4000-8000-000000000302",
+          baseRevision: 0,
           board: snapshot.game?.board,
           hands: snapshot.game?.hands,
         }),

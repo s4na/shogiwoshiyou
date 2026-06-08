@@ -1365,7 +1365,7 @@ function connectionColor(conn: "idle" | "connecting" | "live" | "reconnecting" |
   return t.text.tertiary;
 }
 
-// ─── Event handlers (unchanged logic) ────────────────
+// ─── Event handlers ──────────────────────────────────
 async function bootstrap(): Promise<void> {
   try {
     const session = await getSession();
@@ -1647,6 +1647,7 @@ async function persistAnalysis(board: AnalysisSnapshot["board"], hands: Analysis
   await withBusy(async () => {
     const response = await updateAnalysis(game.id, {
       requestId: crypto.randomUUID(),
+      baseRevision: analysisSnapshot.value?.revision ?? 0,
       board,
       hands,
     });
@@ -1717,6 +1718,10 @@ function startPolling(gameId: string): void {
       .then(async (response) => {
         if (activeGame.value?.id !== gameId) return;
         applyGameSnapshot(response.game);
+        if (analysisMode.value) {
+          const analysis = await getAnalysis(gameId);
+          analysisSnapshot.value = analysis.analysis;
+        }
         await refreshGames();
         await refreshEvents();
       })

@@ -44,6 +44,7 @@ type ResignRequest = {
 
 type AnalysisUpdateRequest = {
   requestId: string;
+  baseRevision: number;
   board: BoardSquare[];
   hands: Record<PlayerColor, HandPiece[]>;
 };
@@ -355,6 +356,9 @@ export class GameRoom implements DurableObject {
     this.ensureCanUseAnalysis(game, userId);
     const now = new Date().toISOString();
     const previous = await this.loadOrCreateStoredAnalysis(game);
+    if (body.baseRevision !== previous.revision) {
+      throw new RoomError(409, "analysis_revision_conflict", "感想戦の盤面が更新されています。");
+    }
     const next: StoredAnalysisSnapshot = {
       gameId: game.id,
       sourceGameVersion: game.version,

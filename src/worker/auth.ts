@@ -10,6 +10,7 @@ import { HttpError } from "./http";
 const SESSION_DAYS = 30;
 const COOKIE_DEFAULT = "shogiwoshiyou_session";
 const RESERVED_HANDLES = new Set(["cpu"]);
+const RESERVED_HANDLE_PREFIXES = ["guest_"];
 
 export type RegisterInput = {
   handle: string;
@@ -105,7 +106,10 @@ export async function currentUser(c: Context<AppEnv>): Promise<UserSummary | nul
 
 export async function register(c: Context<AppEnv>, input: RegisterInput): Promise<UserSummary> {
   const normalizedHandle = normalizeHandle(input.handle);
-  if (RESERVED_HANDLES.has(normalizedHandle)) {
+  if (
+    RESERVED_HANDLES.has(normalizedHandle) ||
+    RESERVED_HANDLE_PREFIXES.some((prefix) => normalizedHandle.startsWith(prefix))
+  ) {
     throw new HttpError(409, "handle_reserved", "そのハンドルは予約されています。");
   }
   const expectedTermsHash = await currentTermsHash();
