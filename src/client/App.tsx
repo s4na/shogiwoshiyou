@@ -778,7 +778,7 @@ function ModeSelectScreen() {
           今日はどう指しますか
         </h2>
         <p style={{ maxWidth: 620, fontFamily: fG, fontSize: 14, lineHeight: 1.8, color: t.text.secondary }}>
-          新しく始めるか、途中の対局に戻るかを選んでから盤面へ進みます。
+          新しく始めるか、途中または最近の対局に戻るかを選んでから盤面へ進みます。
         </p>
       </section>
 
