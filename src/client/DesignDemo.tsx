@@ -417,6 +417,44 @@ function PieceGallery() {
   );
 }
 
+// ─── Screen flow mock data ────────────────────────────
+
+type MockPiece = { kanji: string; color: "b" | "w"; promoted?: boolean };
+type BoardGrid = (MockPiece | null)[][];
+const bk = (kanji: string, promoted?: true): MockPiece => promoted ? { kanji, color: "b", promoted } : { kanji, color: "b" };
+const wh = (kanji: string, promoted?: true): MockPiece => promoted ? { kanji, color: "w", promoted } : { kanji, color: "w" };
+const FILES = ["９","８","７","６","５","４","３","２","１"] as const;
+const RANKS = ["一","二","三","四","五","六","七","八","九"] as const;
+
+const BOARD_INITIAL: BoardGrid = [
+  [wh("香"),wh("桂"),wh("銀"),wh("金"),wh("王"),wh("金"),wh("銀"),wh("桂"),wh("香")],
+  [null,    wh("飛"),null,    null,    null,    null,    null,    wh("角"),null   ],
+  [wh("歩"),wh("歩"),wh("歩"),wh("歩"),wh("歩"),wh("歩"),wh("歩"),wh("歩"),wh("歩")],
+  [null,    null,    null,    null,    null,    null,    null,    null,    null   ],
+  [null,    null,    null,    null,    null,    null,    null,    null,    null   ],
+  [null,    null,    null,    null,    null,    null,    null,    null,    null   ],
+  [bk("歩"),bk("歩"),bk("歩"),bk("歩"),bk("歩"),bk("歩"),bk("歩"),bk("歩"),bk("歩")],
+  [null,    bk("角"),null,    null,    null,    null,    null,    bk("飛"),null   ],
+  [bk("香"),bk("桂"),bk("銀"),bk("金"),bk("玉"),bk("金"),bk("銀"),bk("桂"),bk("香")],
+];
+// Mid-game: white played 3三→3四 (col6 row2→row3), black to move
+const BOARD_ACTIVE: BoardGrid = [
+  [wh("香"),wh("桂"),wh("銀"),wh("金"),wh("王"),wh("金"),wh("銀"),wh("桂"),wh("香")],
+  [null,    wh("飛"),null,    null,    null,    null,    null,    wh("角"),null    ],
+  [wh("歩"),wh("歩"),wh("歩"),wh("歩"),wh("歩"),wh("歩"),null,    wh("歩"),wh("歩")],
+  [null,    null,    null,    null,    null,    null,    wh("歩"),null,    null    ],
+  [null,    null,    null,    null,    null,    null,    null,    null,    null    ],
+  [null,    null,    bk("歩"),null,    null,    null,    null,    null,    null    ],
+  [bk("歩"),bk("歩"),null,    bk("歩"),bk("歩"),bk("歩"),bk("歩"),bk("歩"),bk("歩")],
+  [null,    bk("角"),null,    null,    null,    null,    null,    bk("飛"),null    ],
+  [bk("香"),bk("桂"),bk("銀"),bk("金"),bk("玉"),bk("金"),bk("銀"),bk("桂"),bk("香")],
+];
+
+const LAST_FROM: [number, number] = [6, 2];
+const LAST_TO:   [number, number] = [6, 3];
+const SEL_CELL:  [number, number] = [2, 6]; // 7七の歩を選択中
+const LEGAL_MVS: [number, number][] = [[2, 5], [2, 4]];
+
 // ─── Interactive board demo ───────────────────────────
 
 function InteractiveBoardDemo() {
@@ -432,13 +470,9 @@ function InteractiveBoardDemo() {
     }
   }, [history.length]);
 
-  const FILES = ["９","８","７","６","５","４","３","２","１"];
-  const RANKS = ["一","二","三","四","五","六","七","八","九"];
-
   function handleCellClick(ci: number, ri: number) {
     if (selected) {
-      const sc = selected[0] ?? 0;
-      const sr = selected[1] ?? 0;
+      const [sc, sr] = selected;
       if (sc === ci && sr === ri) {
         setSelected(null);
         return;
@@ -665,42 +699,6 @@ function TypographySection() {
   );
 }
 
-// ─── Screen flow mock data ────────────────────────────
-
-type MockPiece = { kanji: string; color: "b" | "w"; promoted?: boolean };
-type BoardGrid = (MockPiece | null)[][];
-const bk = (kanji: string, promoted?: true): MockPiece => promoted ? { kanji, color: "b", promoted } : { kanji, color: "b" };
-const wh = (kanji: string, promoted?: true): MockPiece => promoted ? { kanji, color: "w", promoted } : { kanji, color: "w" };
-
-// Mid-game: white played 3三→3四 (col6 row2→row3), black to move
-const BOARD_ACTIVE: BoardGrid = [
-  [wh("香"),wh("桂"),wh("銀"),wh("金"),wh("王"),wh("金"),wh("銀"),wh("桂"),wh("香")],
-  [null,    wh("飛"),null,    null,    null,    null,    null,    wh("角"),null    ],
-  [wh("歩"),wh("歩"),wh("歩"),wh("歩"),wh("歩"),wh("歩"),null,    wh("歩"),wh("歩")],
-  [null,    null,    null,    null,    null,    null,    wh("歩"),null,    null    ],
-  [null,    null,    null,    null,    null,    null,    null,    null,    null    ],
-  [null,    null,    bk("歩"),null,    null,    null,    null,    null,    null    ],
-  [bk("歩"),bk("歩"),null,    bk("歩"),bk("歩"),bk("歩"),bk("歩"),bk("歩"),bk("歩")],
-  [null,    bk("角"),null,    null,    null,    null,    null,    bk("飛"),null    ],
-  [bk("香"),bk("桂"),bk("銀"),bk("金"),bk("王"),bk("金"),bk("銀"),bk("桂"),bk("香")],
-];
-const BOARD_INITIAL: BoardGrid = [
-  [wh("香"),wh("桂"),wh("銀"),wh("金"),wh("王"),wh("金"),wh("銀"),wh("桂"),wh("香")],
-  [null,    wh("飛"),null,    null,    null,    null,    null,    wh("角"),null   ],
-  [wh("歩"),wh("歩"),wh("歩"),wh("歩"),wh("歩"),wh("歩"),wh("歩"),wh("歩"),wh("歩")],
-  [null,    null,    null,    null,    null,    null,    null,    null,    null   ],
-  [null,    null,    null,    null,    null,    null,    null,    null,    null   ],
-  [null,    null,    null,    null,    null,    null,    null,    null,    null   ],
-  [bk("歩"),bk("歩"),bk("歩"),bk("歩"),bk("歩"),bk("歩"),bk("歩"),bk("歩"),bk("歩")],
-  [null,    bk("角"),null,    null,    null,    null,    null,    bk("飛"),null   ],
-  [bk("香"),bk("桂"),bk("銀"),bk("金"),bk("玉"),bk("金"),bk("銀"),bk("桂"),bk("香")],
-];
-
-const LAST_FROM: [number, number] = [6, 2];
-const LAST_TO:   [number, number] = [6, 3];
-const SEL_CELL:  [number, number] = [2, 6]; // 7七の歩を選択中
-const LEGAL_MVS: [number, number][] = [[2, 5], [2, 4]];
-
 // ─── Static board ─────────────────────────────────────
 
 function cellEq(cell: [number, number] | undefined, c: number, r: number): boolean {
@@ -722,13 +720,11 @@ function StaticBoard({
   const t = useTheme();
   const ps = Math.floor(cellSize * 0.76);
   const RW = 18;
-  const files = ["９","８","７","６","５","４","３","２","１"];
-  const ranks = ["一","二","三","四","五","六","七","八","九"];
   const STARS: [number, number][] = [[2,2],[2,5],[5,2],[5,5]];
   return (
     <div style={{ width: "fit-content", margin: "8px auto" }}>
       <div style={{ display: "flex", paddingRight: RW }}>
-        {files.map((n, i) => (
+        {FILES.map((n, i) => (
           <div key={i} style={{ width: cellSize, textAlign: "center", fontFamily: fS, fontSize: Math.max(8, cellSize * 0.22), color: t.board.grid, opacity: 0.8 }}>{n}</div>
         ))}
       </div>
@@ -750,7 +746,7 @@ function StaticBoard({
           }))}
         </div>
         <div style={{ display: "flex", flexDirection: "column", width: RW }}>
-          {ranks.map((n, i) => (
+          {RANKS.map((n, i) => (
             <div key={i} style={{ height: cellSize, display: "flex", alignItems: "center", paddingLeft: 3, fontFamily: fS, fontSize: Math.max(8, cellSize*0.22), color: t.board.grid, opacity: 0.8 }}>{n}</div>
           ))}
         </div>
