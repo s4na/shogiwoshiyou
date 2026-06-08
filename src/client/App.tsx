@@ -761,23 +761,24 @@ function ModeSelectScreen() {
           display: "grid",
           gap: 8,
           borderBottom: `1px solid ${t.border.subtle}`,
-          paddingBottom: 18,
+          paddingBottom: 20,
         }}
       >
         <p
           style={{
             fontFamily: fG,
-            fontSize: 12,
+            fontSize: 13,
             fontWeight: 700,
+            letterSpacing: "0.06em",
             color: t.accent.gold,
           }}
         >
           モード選択
         </p>
-        <h2 style={{ fontFamily: fS, fontSize: "clamp(1.6rem, 1.25rem + 1.4vw, 2.4rem)", color: t.text.primary }}>
+        <h2 style={{ fontFamily: fS, fontSize: "clamp(1.5rem, 1.2rem + 1vw, 2rem)", fontWeight: 700, color: t.text.primary }}>
           今日はどう指しますか
         </h2>
-        <p style={{ maxWidth: 620, fontFamily: fG, fontSize: 14, lineHeight: 1.8, color: t.text.secondary }}>
+        <p style={{ maxWidth: 560, fontFamily: fG, fontSize: 14, lineHeight: 1.8, color: t.text.secondary }}>
           新しく始めるか、途中または最近の対局に戻るかを選んでから盤面へ進みます。
         </p>
       </section>
@@ -785,7 +786,7 @@ function ModeSelectScreen() {
       <form
         onSubmit={(event) => void submitCreateGame(event)}
         aria-label="対戦モード"
-        style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 16 }}
+        style={{ display: "grid", gridTemplateColumns: "1fr", gap: 16, maxWidth: 560 }}
       >
         <ModeCard
           mode="cpu"
@@ -823,16 +824,18 @@ function ModeCard({
   const selected = gameMode.value === mode;
   return (
     <div
+      onClick={() => { gameMode.value = mode; }}
       style={{
-        minHeight: 260,
         display: "grid",
         alignContent: "space-between",
-        gap: 18,
+        gap: 16,
         padding: 20,
         borderRadius: R.lg,
-        border: `1px solid ${selected ? accent : t.border.default}`,
+        border: `2px solid ${selected ? accent : t.border.default}`,
         backgroundColor: selected ? t.bg.elevated : t.bg.secondary,
-        boxShadow: selected ? t.shadow.md : t.shadow.sm,
+        boxShadow: selected ? `${t.shadow.md}, 0 0 0 3px ${accent}22` : t.shadow.sm,
+        cursor: "pointer",
+        transition: `border-color ${MOTION.normal}, box-shadow ${MOTION.normal}, background-color ${MOTION.normal}`,
       }}
     >
       <div style={{ display: "grid", gap: 12 }}>
@@ -860,21 +863,23 @@ function ModeCard({
               onChange={() => { gameMode.value = mode; }}
               style={{ accentColor: accent, flexShrink: 0 }}
             />
-            <span style={{ fontFamily: fS, fontSize: 22, fontWeight: 800 }}>{title}</span>
+            <span style={{ fontFamily: fS, fontSize: 20, fontWeight: 800 }}>{title}</span>
           </span>
           <span
             aria-hidden="true"
             style={{
-              width: 34,
-              height: 34,
+              width: 36,
+              height: 36,
               display: "grid",
               placeItems: "center",
               borderRadius: R.full,
-              border: `1px solid ${selected ? accent : t.border.default}`,
+              border: `2px solid ${selected ? accent : t.border.default}`,
               color: selected ? accent : t.text.tertiary,
               fontFamily: fG,
+              fontSize: 15,
               fontWeight: 900,
               flexShrink: 0,
+              transition: `color ${MOTION.normal}, border-color ${MOTION.normal}`,
             }}
           >
             {mode === "cpu" ? "歩" : "対"}
@@ -897,6 +902,7 @@ function ModeCard({
             autoComplete="off"
             aria-describedby="friend-passcode-help"
             onFocus={() => { gameMode.value = "friend"; }}
+            onClick={(e) => { e.stopPropagation(); }}
           />
         </FieldGroup>
       ) : (
@@ -910,7 +916,8 @@ function ModeCard({
         size="lg"
         full
         type={selected ? "submit" : "button"}
-        disabled={busy.value || !selected}
+        disabled={busy.value}
+        onClick={() => { gameMode.value = mode; }}
       >
         {mode === "cpu" ? "CPUと始める" : "合言葉で待ち合わせる"}
       </Btn>
@@ -930,7 +937,7 @@ function ResumeGamesPanel() {
         ) : (
           <GameList onSelect={(gameId) => void selectGame(gameId)} />
         )}
-        <div style={{ display: "flex", justifyContent: "flex-start", paddingTop: 4 }}>
+        <div style={{ display: "flex", justifyContent: "flex-end", paddingTop: 4 }}>
           <Btn variant="secondary" size="sm" onClick={() => void refreshGames()} disabled={busy.value}>
             対局一覧を更新
           </Btn>
@@ -957,12 +964,24 @@ function PlayScreen() {
 // ─── Game list panel ──────────────────────────────────
 function GameListPanel() {
   const t = useTheme();
+  const inBattle = activeGame.value?.status === "active" || activeGame.value?.status === "ended";
+
+  if (inBattle) {
+    return (
+      <div style={{ paddingTop: 4 }}>
+        <Btn variant="ghost" size="sm" onClick={() => { returnToModeSelect(); }} disabled={busy.value}>
+          ← モード選択へ
+        </Btn>
+      </div>
+    );
+  }
+
   return (
     <Card>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
         <h2 style={{ fontFamily: fS, fontSize: 16, fontWeight: 700, color: t.text.primary }}>戦闘モード</h2>
-        <Btn variant="ghost" size="sm" onClick={() => { returnToModeSelect(); }} disabled={busy.value}>
-          モード選択へ戻る
+        <Btn variant="secondary" size="sm" onClick={() => { returnToModeSelect(); }} disabled={busy.value}>
+          ← モード選択へ
         </Btn>
       </div>
 
@@ -1439,48 +1458,65 @@ function HistoryPanel() {
   }, [game?.id, game?.moves.length]);
 
   return (
-    <Card title="棋譜">
-      {!game && (
-        <p style={{ fontFamily: fG, fontSize: 13, color: t.text.tertiary, textAlign: "center", padding: 8 }}>
-          対局未選択
-        </p>
-      )}
-      {game && (
-        <>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-            <span style={{ fontFamily: fG, fontSize: 12, color: t.text.secondary }}>{game.moves.length}手</span>
-          </div>
+    <div
+      style={{
+        backgroundColor: t.bg.secondary,
+        borderRadius: R.lg,
+        border: `1px solid ${t.border.subtle}`,
+        overflow: "hidden",
+      }}
+    >
+      <div
+        style={{
+          padding: "8px 12px",
+          borderBottom: `1px solid ${t.border.subtle}`,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+        }}
+      >
+        <span style={{ fontFamily: fG, fontSize: 11, fontWeight: 600, color: t.text.tertiary, letterSpacing: "0.04em" }}>
+          棋譜
+        </span>
+        {game && (
+          <span style={{ fontFamily: fG, fontSize: 10, color: t.text.tertiary, fontVariantNumeric: "tabular-nums" }}>
+            {game.moves.length}手
+          </span>
+        )}
+      </div>
+
+      <div style={{ padding: "8px 12px" }}>
+        {!game && (
+          <p style={{ fontFamily: fG, fontSize: 12, color: t.text.tertiary, textAlign: "center", padding: "8px 0" }}>
+            対局未選択
+          </p>
+        )}
+        {game && (
           <ol
             ref={listRef}
-            style={{
-              listStyle: "none",
-              display: "grid",
-              gap: 2,
-              maxHeight: "45svh",
-              overflowY: "auto",
-            }}
+            style={{ listStyle: "none", display: "grid", gap: 1, maxHeight: "45svh", overflowY: "auto" }}
           >
             {game.moves.map((move) => (
               <li
                 key={move.ply}
                 style={{
-                  display: "grid",
-                  gridTemplateColumns: "28px 1fr",
-                  gap: 8,
+                  display: "flex",
                   alignItems: "center",
-                  minHeight: 28,
-                  padding: "3px 6px",
-                  borderBottom: `1px solid ${t.border.subtle}`,
-                  backgroundColor: move.ply === game.moves.length ? t.accent.goldDim : "transparent",
+                  gap: 6,
+                  padding: "2px 4px",
                   borderRadius: R.sm,
+                  backgroundColor: move.ply === game.moves.length ? t.accent.goldDim : "transparent",
                 }}
               >
                 <span
                   style={{
                     fontFamily: fG,
-                    fontSize: 10,
+                    fontSize: 9,
                     color: t.text.tertiary,
                     fontVariantNumeric: "tabular-nums",
+                    minWidth: 18,
+                    textAlign: "right",
+                    flexShrink: 0,
                   }}
                 >
                   {move.ply}
@@ -1490,7 +1526,7 @@ function HistoryPanel() {
                   style={{
                     fontFamily: `"SFMono-Regular", Consolas, monospace`,
                     fontSize: 11,
-                    color: t.text.primary,
+                    color: t.text.secondary,
                   }}
                 >
                   {moveNotationLabel(move)}
@@ -1498,32 +1534,22 @@ function HistoryPanel() {
               </li>
             ))}
           </ol>
-        </>
-      )}
+        )}
 
-      {events.value.length > 0 && (
-        <div style={{ marginTop: 12, borderTop: `1px solid ${t.border.subtle}`, paddingTop: 8 }}>
-          <p style={{ fontFamily: fG, fontSize: 10, color: t.text.tertiary, marginBottom: 6 }}>イベント</p>
-          {events.value.slice(-6).map((event) => (
-            <p
-              key={event.id}
-              style={{
-                display: "grid",
-                gridTemplateColumns: "32px 1fr",
-                gap: 6,
-                fontFamily: fG,
-                fontSize: 10,
-                color: t.text.tertiary,
-                marginBottom: 2,
-              }}
-            >
-              <span>{event.seq}</span>
-              <span>{event.type}</span>
-            </p>
-          ))}
-        </div>
-      )}
-    </Card>
+        {events.value.length > 0 && (
+          <div style={{ marginTop: 8, borderTop: `1px solid ${t.border.subtle}`, paddingTop: 6 }}>
+            {events.value.slice(-6).map((event) => (
+              <p
+                key={event.id}
+                style={{ fontFamily: fG, fontSize: 9, color: t.text.tertiary, marginBottom: 2 }}
+              >
+                {event.seq} {event.type}
+              </p>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
