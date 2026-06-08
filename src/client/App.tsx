@@ -782,8 +782,8 @@ function ModeSelectScreen() {
         </p>
       </section>
 
-      <section
-        role="radiogroup"
+      <form
+        onSubmit={(event) => void submitCreateGame(event)}
         aria-label="対戦モード"
         style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 16 }}
       >
@@ -799,7 +799,7 @@ function ModeSelectScreen() {
           description="合言葉で待ち合わせます。同じ合言葉を入れた相手が参加すると対局が始まります。"
           accent={t.accent.jade}
         />
-      </section>
+      </form>
 
       <section>
         <ResumeGamesPanel />
@@ -822,8 +822,7 @@ function ModeCard({
   const t = useTheme();
   const selected = gameMode.value === mode;
   return (
-    <form
-      onSubmit={(event) => void submitCreateGame(event)}
+    <div
       style={{
         minHeight: 260,
         display: "grid",
@@ -836,11 +835,8 @@ function ModeCard({
         boxShadow: selected ? t.shadow.md : t.shadow.sm,
       }}
     >
-      <input type="hidden" name="mode" value={mode} />
       <div style={{ display: "grid", gap: 12 }}>
         <label
-          role="radio"
-          aria-checked={selected}
           style={{
             width: "100%",
             display: "flex",
@@ -858,7 +854,7 @@ function ModeCard({
           <span style={{ display: "inline-flex", alignItems: "center", gap: 10, minWidth: 0 }}>
             <input
               type="radio"
-              name="selected-mode"
+              name="mode"
               value={mode}
               checked={selected}
               onChange={() => { gameMode.value = mode; }}
@@ -911,7 +907,7 @@ function ModeCard({
       <Btn variant={selected ? "primary" : "secondary"} size="lg" full type="submit" disabled={busy.value || !selected}>
         {mode === "cpu" ? "CPUと始める" : "合言葉で待ち合わせる"}
       </Btn>
-    </form>
+    </div>
   );
 }
 
