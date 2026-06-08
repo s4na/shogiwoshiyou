@@ -905,7 +905,13 @@ function ModeCard({
         </p>
       )}
 
-      <Btn variant={selected ? "primary" : "secondary"} size="lg" full type="submit" disabled={busy.value || !selected}>
+      <Btn
+        variant={selected ? "primary" : "secondary"}
+        size="lg"
+        full
+        type={selected ? "submit" : "button"}
+        disabled={busy.value || !selected}
+      >
         {mode === "cpu" ? "CPUと始める" : "合言葉で待ち合わせる"}
       </Btn>
     </div>
