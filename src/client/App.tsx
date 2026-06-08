@@ -456,7 +456,7 @@ function AuthScreen() {
 
         {/* Form */}
         <form onSubmit={(event) => void submitAuth(event)} style={{ display: "grid", gap: 16, padding: 24 }}>
-          <FieldGroup id="auth-handle" label="ハンドル" helpId="auth-handle-help" help="3〜24文字。半角英数字と _ のみ。cpu と guest_ で始まるハンドルは予約済み。">
+          <FieldGroup id="auth-handle" label="ハンドル" helpId="auth-handle-help" help="3〜24文字。半角英数字と _ のみ。cpu は使用できません。guest_ で始まるハンドルも予約済みです。">
             <Input
               id="auth-handle"
               name="handle"
@@ -557,7 +557,15 @@ function AuthScreen() {
               style={{ width: 16, height: 16, marginTop: 3, accentColor: t.accent.gold, flexShrink: 0 }}
             />
             <span>
-              利用規約に同意して、保存用パスワードなしのゲストとして入ります。
+              利用規約に同意して、保存用パスワードなしのゲストとして入ります。{" "}
+              <a
+                href="/terms"
+                target="_blank"
+                rel="noreferrer"
+                style={{ color: t.accent.gold, fontWeight: 700 }}
+              >
+                利用規約を読む
+              </a>
             </span>
           </label>
           <Btn variant="secondary" size="md" full type="submit" disabled={busy.value || !(termsHash || sessionTermsHash.value)}>
@@ -977,7 +985,7 @@ function BoardPanel() {
             marginBottom: 8,
           }}
         >
-          感想戦中。実戦の棋譜は保存したまま、終局図のコピーを対局者同士で自由に動かせます。
+          感想戦中。実戦の棋譜は保存したまま、終局図のコピー上で空きマスへ自由に動かせます。
         </div>
       )}
 

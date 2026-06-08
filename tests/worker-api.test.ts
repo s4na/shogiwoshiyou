@@ -1086,6 +1086,53 @@ describe("GameRoom moves", () => {
     );
   });
 
+  it("rejects non-object public analysis updates with validation errors", async () => {
+    const db = new FakeD1(null);
+    const namespace = new FakeGameRoomNamespace(db);
+    const env = {
+      DB: db as unknown as D1Database,
+      GAME_ROOM: namespace as unknown as DurableObjectNamespace,
+      SESSION_COOKIE_NAME: "sid",
+    } satisfies Env;
+    const origin = "http://localhost";
+    const black = await registerViaApi(env, origin, "analysis_bad_public");
+    const created = await app.request(
+      `${origin}/api/games`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          cookie: black.cookie,
+          origin,
+        },
+        body: JSON.stringify({ mode: "cpu" }),
+      },
+      env,
+    );
+    const createdBody: { game?: { id?: string } } = await created.json();
+    expect(created.status).toBe(201);
+    expect(createdBody.game?.id).toEqual(expect.stringMatching(/^[0-9a-f-]{36}$/i));
+    const gameId = String(createdBody.game?.id);
+
+    const response = await app.request(
+      `${origin}/api/games/${gameId}/analysis`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          cookie: black.cookie,
+          origin,
+        },
+        body: "null",
+      },
+      env,
+    );
+    const body: { error?: { code?: string } } = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.error?.code).toBe("validation_error");
+  });
+
   it("rejects analysis updates before the game ends", async () => {
     const game = storedGame({
       mode: "friend",

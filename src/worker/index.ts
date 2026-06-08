@@ -76,6 +76,16 @@ const resignSchema = z.object({
   requestId: z.string().min(20).max(80),
 });
 
+const analysisUpdateSchema = z.object({
+  requestId: z.string().min(20).max(80),
+  baseRevision: z.number().int().nonnegative(),
+  board: z.array(z.unknown()).length(81),
+  hands: z.object({
+    black: z.array(z.unknown()).max(7),
+    white: z.array(z.unknown()).max(7),
+  }),
+});
+
 app.onError((error, c) => {
   c.header("X-Robots-Tag", ROBOTS_HEADER);
   if (error instanceof HttpError) {
@@ -196,12 +206,12 @@ app.get("/api/games/:id/analysis", async (c) => {
   return callGameRoom(c.env, gameId, c.get("user").id, "/analysis", { method: "GET" });
 });
 
-app.post("/api/games/:id/analysis", async (c) => {
+app.post("/api/games/:id/analysis", zValidator("json", analysisUpdateSchema, validationHook), async (c) => {
   ensureSameOrigin(c);
   const gameId = validGameId(c.req.param("id"));
   return callGameRoom(c.env, gameId, c.get("user").id, "/analysis", {
     method: "POST",
-    body: JSON.stringify(await c.req.json()),
+    body: JSON.stringify(c.req.valid("json")),
   });
 });
 
