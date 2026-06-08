@@ -1190,11 +1190,13 @@ function HistoryPanel() {
   const game = activeGame.value;
   const listRef = useRef<HTMLOListElement>(null);
 
+  // game は signal のオブジェクト置き換えで更新されるため moves.length の変化を検知できる。
+  // game.id も依存に含め、手数が同じゲームへ切り替えた場合もスクロールを発火させる。
   useEffect(() => {
     if (listRef.current) {
       listRef.current.scrollTop = listRef.current.scrollHeight;
     }
-  }, [game?.moves.length]);
+  }, [game?.id, game?.moves.length]);
 
   return (
     <Card title="棋譜">
