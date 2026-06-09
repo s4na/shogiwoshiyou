@@ -95,6 +95,7 @@ const friendRematchInvite = signal<{
   acceptedCount: number;
   requiredCount: number;
 } | null>(null);
+const endgameModal = signal<{ gameId: string; version: number } | null>(null);
 const dismissedRematchInvites = signal<Record<string, number>>({});
 const notice = signal<string | null>(null);
 const busy = signal(false);
@@ -1050,6 +1051,16 @@ function BoardPanel() {
                 : "もう一局"}
             </Btn>
           )}
+          {game.status === "ended" && game.mode === "cpu" && color && (
+            <Btn
+              variant="primary"
+              size="sm"
+              onClick={() => void handleCpuRematch()}
+              disabled={busy.value}
+            >
+              もう一局
+            </Btn>
+          )}
           <Btn variant="secondary" size="sm" onClick={() => void handleDownloadKif(game.id)} disabled={busy.value}>
             棋譜DL
           </Btn>
@@ -1146,7 +1157,95 @@ function BoardPanel() {
           </div>
         ) : null}
       </Modal>
+      <EndgameModal
+        game={game}
+        color={color}
+        rematchPasscode={rematchPasscode}
+        rematchState={rematchState}
+      />
     </div>
+  );
+}
+
+function EndgameModal({
+  game,
+  color,
+  rematchPasscode,
+  rematchState,
+}: {
+  game: GameSnapshot;
+  color: PlayerColor | null;
+  rematchPasscode: string | undefined;
+  rematchState: { acceptedCount: number; requiredCount: number } | null;
+}) {
+  const t = useTheme();
+  const modalState = endgameModal.value;
+  const open =
+    modalState?.gameId === game.id &&
+    modalState.version === game.version &&
+    game.status === "ended" &&
+    isPromptableEndReason(game.endReason);
+  const userWon = Boolean(user.value && game.winner?.id === user.value.id);
+  const canRematch = game.mode === "cpu" || Boolean(color && rematchPasscode);
+  const rematchLabel =
+    game.mode === "friend" && rematchState
+      ? `相手待ち ${String(rematchState.acceptedCount)}/${String(rematchState.requiredCount)}`
+      : "もう一局";
+
+  return (
+    <Modal open={open} onClose={closeEndgameModal} title={endgameTitle(game, userWon)}>
+      <div style={{ display: "grid", gap: 16 }}>
+        <div
+          style={{
+            display: "grid",
+            gap: 8,
+            padding: 14,
+            borderRadius: R.md,
+            border: `1px solid ${userWon ? t.accent.jade : t.border.default}`,
+            backgroundColor: userWon ? t.accent.jadeDim : t.bg.tertiary,
+          }}
+        >
+          <p style={{ color: t.text.primary, fontFamily: fS, fontSize: 18, fontWeight: 800, lineHeight: 1.45 }}>
+            {game.winner ? `${game.winner.displayName} の勝ち` : "終局"}
+          </p>
+          <p style={{ color: t.text.secondary, fontFamily: fG, fontSize: 13, lineHeight: 1.7 }}>
+            {endReasonLabel(game)}で対局が終わりました。終局図をそのまま検討するか、次の対局へ進めます。
+          </p>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+          <Btn
+            variant="secondary"
+            size="md"
+            full
+            type="button"
+            onClick={() => void startEndgameAnalysis(game.id)}
+            disabled={busy.value}
+          >
+            感想戦
+          </Btn>
+          <Btn
+            variant="primary"
+            size="md"
+            full
+            type="button"
+            onClick={() => void handleEndgameRematch(game)}
+            disabled={busy.value || !canRematch || Boolean(rematchState)}
+          >
+            {rematchLabel}
+          </Btn>
+        </div>
+        {!canRematch && game.mode === "friend" ? (
+          <p style={{ color: t.text.tertiary, fontFamily: fG, fontSize: 12, lineHeight: 1.6, textAlign: "center" }}>
+            もう一局は、この端末に合言葉が残っている対局で選べます。
+          </p>
+        ) : null}
+        <div style={{ display: "flex", justifyContent: "center" }}>
+          <Btn variant="ghost" size="sm" type="button" onClick={closeEndgameModal}>
+            盤面を見る
+          </Btn>
+        </div>
+      </div>
+    </Modal>
   );
 }
 
@@ -1608,6 +1707,7 @@ async function handleLogout(): Promise<void> {
     events.value = [];
     analysisMode.value = false;
     analysisSnapshot.value = null;
+    endgameModal.value = null;
     friendPasscodes.value = {};
     friendRematch.value = null;
     friendRematchInvite.value = null;
@@ -1658,6 +1758,7 @@ async function selectGame(gameId: string): Promise<void> {
     analysisSnapshot.value = null;
     analysisSelectedSquare.value = null;
     analysisSelectedHand.value = null;
+    endgameModal.value = null;
     stopRematchPolling();
     stopRematchInvitePolling();
     friendRematch.value = null;
@@ -1680,6 +1781,7 @@ function returnToModeSelect(): void {
   analysisSnapshot.value = null;
   analysisSelectedSquare.value = null;
   analysisSelectedHand.value = null;
+  endgameModal.value = null;
   stopRematchPolling();
   stopRematchInvitePolling();
   friendRematch.value = null;
@@ -1770,6 +1872,27 @@ async function handleFriendRematch(gameId: string): Promise<void> {
     friendRematchInvite.value = null;
     await acceptFriendRematch(gameId, passcode);
   });
+}
+
+async function handleCpuRematch(): Promise<void> {
+  closeEndgameModal();
+  await submitCreateGame("cpu");
+}
+
+async function handleEndgameRematch(game: GameSnapshot): Promise<void> {
+  closeEndgameModal();
+  if (game.mode === "cpu") {
+    await handleCpuRematch();
+    return;
+  }
+  await handleFriendRematch(game.id);
+}
+
+async function startEndgameAnalysis(gameId: string): Promise<void> {
+  closeEndgameModal();
+  if (!analysisMode.value) {
+    await toggleAnalysisMode(gameId);
+  }
 }
 
 async function acceptFriendRematch(gameId: string, passcode: string): Promise<void> {
@@ -2036,7 +2159,16 @@ function closeRealtime(): void {
 }
 
 function applyGameSnapshot(game: GameSnapshot): void {
+  const previousGame = activeGame.value;
   activeGame.value = game;
+  if (
+    previousGame?.id === game.id &&
+    previousGame.status !== "ended" &&
+    game.status === "ended" &&
+    isPromptableEndReason(game.endReason)
+  ) {
+    endgameModal.value = { gameId: game.id, version: game.version };
+  }
   if (friendRematch.value && friendRematch.value.gameId !== game.id) {
     stopRematchPolling();
     friendRematch.value = null;
@@ -2046,6 +2178,7 @@ function applyGameSnapshot(game: GameSnapshot): void {
     analysisSnapshot.value = null;
     analysisSelectedSquare.value = null;
     analysisSelectedHand.value = null;
+    endgameModal.value = null;
     stopRematchInvitePolling();
     friendRematchInvite.value = null;
   } else if (game.mode === "friend") {
@@ -2153,6 +2286,25 @@ function statusLabel(game: GameSnapshot | GameSummary): string {
   }
   if (game.winner) return `${game.winner.displayName} の勝ち`;
   return "終局";
+}
+
+function isPromptableEndReason(reason: GameSnapshot["endReason"]): boolean {
+  return reason === "checkmate" || reason === "resign";
+}
+
+function endReasonLabel(game: GameSnapshot): string {
+  if (game.endReason === "checkmate") return "詰み";
+  if (game.endReason === "resign") return "投了";
+  return "終局";
+}
+
+function endgameTitle(game: GameSnapshot, userWon: boolean): string {
+  if (!game.winner || !user.value) return "対局終了";
+  return userWon ? "勝ちました" : "負けました";
+}
+
+function closeEndgameModal(): void {
+  endgameModal.value = null;
 }
 
 function modeLabel(mode: GameMode): string {

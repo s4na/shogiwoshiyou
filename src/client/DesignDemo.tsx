@@ -902,7 +902,7 @@ function MockBoardPanel({ gameState }: { gameState: "my-turn"|"cpu-thinking"|"wo
   const { label, color } = statusMap[gameState];
   const isPlaying = gameState==="my-turn" || gameState==="cpu-thinking";
   return (
-    <div style={{ backgroundColor: t.bg.secondary, borderRadius: R.lg, border: `1px solid ${t.border.subtle}`, padding: 12, boxShadow: t.shadow.sm }}>
+    <div style={{ position: "relative", backgroundColor: t.bg.secondary, borderRadius: R.lg, border: `1px solid ${t.border.subtle}`, padding: 12, boxShadow: t.shadow.sm, overflow: "hidden" }}>
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, marginBottom: 10, flexWrap: "wrap" }}>
         <div>
           <StatusChip color={color}>{label}</StatusChip>
@@ -933,6 +933,45 @@ function MockBoardPanel({ gameState }: { gameState: "my-turn"|"cpu-thinking"|"wo
       <MockHand side="black" pieces={
         gameState!=="waiting" ? [{ kanji:"歩", count:4 }, { kanji:"香", count:1 }, { kanji:"角", count:1 }] : []
       } />
+      {gameState==="won" && (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            display: "grid",
+            placeItems: "center",
+            padding: 16,
+            backgroundColor: t.bg.overlay,
+          }}
+        >
+          <div
+            style={{
+              width: "min(320px, 100%)",
+              display: "grid",
+              gap: 14,
+              padding: 18,
+              borderRadius: R.xl,
+              border: `1px solid ${t.border.default}`,
+              backgroundColor: t.bg.elevated,
+              boxShadow: t.shadow.lg,
+            }}
+          >
+            <div style={{ display: "grid", gap: 6 }}>
+              <p style={{ color: t.text.primary, fontFamily: fS, fontSize: 16, fontWeight: 800 }}>勝ちました</p>
+              <p style={{ color: t.text.secondary, fontFamily: fG, fontSize: 12, lineHeight: 1.7 }}>
+                詰みで対局が終わりました。終局図を検討するか、次の対局へ進めます。
+              </p>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              <Btn variant="secondary" size="sm" full>感想戦</Btn>
+              <Btn variant="primary" size="sm" full>もう一局</Btn>
+            </div>
+            <div style={{ display: "flex", justifyContent: "center" }}>
+              <Btn variant="ghost" size="sm">盤面を見る</Btn>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
