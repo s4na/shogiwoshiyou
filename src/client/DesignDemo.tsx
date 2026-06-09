@@ -944,7 +944,7 @@ const MOCK_MOVES = [
 function MockHistoryPanel() {
   const t = useTheme();
   return (
-    <div style={{ overflow: "hidden", opacity: 0.7 }}>
+    <div style={{ overflow: "hidden", opacity: 0.7, width: 120, flexShrink: 0 }}>
       <div style={{ padding: "4px 8px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <span style={{ fontFamily: fG, fontSize: 10, fontWeight: 600, color: t.text.tertiary, letterSpacing: "0.04em" }}>棋譜</span>
         <span style={{ fontFamily: fG, fontSize: 9, color: t.text.tertiary, fontVariantNumeric: "tabular-nums" }}>{MOCK_MOVES.length}手</span>
@@ -970,10 +970,12 @@ function MockHistoryPanel() {
 
 function PlayScreenMock({ gameState }: { gameState: "my-turn"|"cpu-thinking"|"won"|"waiting" }) {
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "auto 290px 140px", gap: 12, alignItems: "start", minWidth: 500 }}>
-      <MockGameListPanel />
-      <MockBoardPanel gameState={gameState} />
-      <MockHistoryPanel />
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+      <div style={{ alignSelf: "flex-start" }}><MockGameListPanel /></div>
+      <div style={{ display: "flex", gap: 12, alignItems: "start", justifyContent: "center" }}>
+        <MockBoardPanel gameState={gameState} />
+        <MockHistoryPanel />
+      </div>
     </div>
   );
 }

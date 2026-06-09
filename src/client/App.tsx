@@ -146,13 +146,8 @@ export function App() {
         ::-webkit-scrollbar-track { background: ${theme.bg.secondary}; }
         ::-webkit-scrollbar-thumb { background: ${theme.border.default}; border-radius: 3px; }
         input::placeholder { color: ${theme.text.tertiary}; }
-        .play-layout { display: grid; grid-template-columns: auto 1fr 180px; gap: 16px; }
-        @media (max-width: 860px) {
-          .play-layout { grid-template-columns: 1fr !important; }
-          .side-order-1 { order: 2; }
-          .board-order { order: 1; }
-          .history-order { order: 3; }
-        }
+        .play-layout { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+        .play-board-row { display: flex; gap: 12px; align-items: start; justify-content: center; }
       `}</style>
 
       <div
@@ -860,11 +855,13 @@ function PlayScreen() {
   return (
     <main
       className="play-layout"
-      style={{ maxWidth: 1380, margin: "0 auto", padding: "20px 24px 60px", alignItems: "start" }}
+      style={{ maxWidth: 1080, margin: "0 auto", padding: "12px 24px 60px" }}
     >
-      <div className="side-order-1"><GameListPanel /></div>
-      <div className="board-order"><BoardPanel /></div>
-      <div className="history-order"><HistoryPanel /></div>
+      <div style={{ alignSelf: "flex-start" }}><GameListPanel /></div>
+      <div className="play-board-row">
+        <BoardPanel />
+        <HistoryPanel />
+      </div>
     </main>
   );
 }
@@ -1347,6 +1344,8 @@ function HistoryPanel() {
       style={{
         overflow: "hidden",
         opacity: 0.7,
+        width: 150,
+        flexShrink: 0,
       }}
     >
       <div
