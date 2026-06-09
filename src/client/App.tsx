@@ -39,7 +39,6 @@ import {
   useTheme,
   ShogiPiece,
   Btn,
-  Card,
   Toast,
   Modal,
   StatusChip,
@@ -86,8 +85,7 @@ const notice = signal<string | null>(null);
 const busy = signal(false);
 const connection = signal<"idle" | "connecting" | "live" | "reconnecting" | "polling">("idle");
 const authMode = signal<"register" | "login">("register");
-const gameMode = signal<GameMode>("cpu");
-const appStage = signal<"mode-select" | "battle">("mode-select");
+const appStage = signal<"mode-select" | "playing">("mode-select");
 const currentPage = signal<"home" | "terms">(pageForPath(window.location.pathname));
 
 const signedIn = computed(() => user.value !== null && user.value !== undefined);
@@ -148,13 +146,8 @@ export function App() {
         ::-webkit-scrollbar-track { background: ${theme.bg.secondary}; }
         ::-webkit-scrollbar-thumb { background: ${theme.border.default}; border-radius: 3px; }
         input::placeholder { color: ${theme.text.tertiary}; }
-        .play-layout { display: grid; grid-template-columns: minmax(220px,280px) minmax(0,1fr) minmax(200px,260px); gap: 16px; }
-        @media (max-width: 1020px) {
-          .play-layout { grid-template-columns: 1fr !important; }
-          .side-order-1 { order: 2; }
-          .board-order { order: 1; }
-          .history-order { order: 3; }
-        }
+        .play-layout { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+        .play-board-row { display: flex; gap: 12px; align-items: start; justify-content: center; }
       `}</style>
 
       <div
@@ -746,204 +739,114 @@ function renderTermsList(lines: string[], startIndex: number, indent: number, t:
 // ─── Mode selection ───────────────────────────────────
 function ModeSelectScreen() {
   const t = useTheme();
+  const [passcodeOpen, setPasscodeOpen] = useState(false);
   return (
     <main
       style={{
-        width: "min(1120px, 100%)",
+        width: "min(480px, 100%)",
         margin: "0 auto",
-        padding: "28px 24px 64px",
+        padding: "48px 24px 64px",
         display: "grid",
-        gap: 24,
+        gap: 12,
       }}
     >
-      <section
-        style={{
-          display: "grid",
-          gap: 8,
-          borderBottom: `1px solid ${t.border.subtle}`,
-          paddingBottom: 20,
-        }}
-      >
-        <p
-          style={{
-            fontFamily: fG,
-            fontSize: 13,
-            fontWeight: 700,
-            letterSpacing: "0.06em",
-            color: t.accent.gold,
-          }}
+      <section aria-label="対戦モード" style={{ display: "grid", gap: 10 }}>
+        <Btn
+          variant="primary"
+          size="lg"
+          full
+          disabled={busy.value}
+          onClick={() => void submitCreateGame("cpu")}
         >
-          モード選択
-        </p>
-        <h2 style={{ fontFamily: fS, fontSize: "clamp(1.5rem, 1.2rem + 1vw, 2rem)", fontWeight: 700, color: t.text.primary }}>
-          今日はどう指しますか
-        </h2>
-        <p style={{ maxWidth: 560, fontFamily: fG, fontSize: 14, lineHeight: 1.8, color: t.text.secondary }}>
-          新しく始めるか、途中または最近の対局に戻るかを選んでから盤面へ進みます。
-        </p>
+          CPU対戦
+        </Btn>
+        {!passcodeOpen ? (
+          <Btn
+            variant="secondary"
+            size="lg"
+            full
+            disabled={busy.value}
+            onClick={() => { setPasscodeOpen(true); }}
+          >
+            友達対戦
+          </Btn>
+        ) : (
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              const form = new FormData(event.currentTarget);
+              const entry = form.get("passcode");
+              const passcode = typeof entry === "string" ? entry.trim() : "";
+              void submitCreateGame("friend", passcode);
+            }}
+            style={{
+              display: "grid",
+              gap: 10,
+              padding: 16,
+              borderRadius: R.lg,
+              border: `1px solid ${t.accent.jade}`,
+              backgroundColor: t.bg.elevated,
+            }}
+          >
+            <FieldGroup id="friend-passcode" label="合言葉" helpId="friend-passcode-help" help="12〜64文字。推測されにくい合言葉を相手だけに共有します。">
+              <Input
+                id="friend-passcode"
+                name="passcode"
+                required
+                minLength={12}
+                maxLength={64}
+                autoComplete="off"
+                aria-describedby="friend-passcode-help"
+              />
+            </FieldGroup>
+            <div style={{ display: "flex", gap: 8 }}>
+              <Btn
+                variant="primary"
+                size="md"
+                full
+                type="submit"
+                disabled={busy.value}
+              >
+                待ち合わせる
+              </Btn>
+              <Btn
+                variant="ghost"
+                size="md"
+                type="button"
+                onClick={() => { setPasscodeOpen(false); }}
+              >
+                戻る
+              </Btn>
+            </div>
+          </form>
+        )}
       </section>
-
-      <form
-        onSubmit={(event) => void submitCreateGame(event)}
-        aria-label="対戦モード"
-        style={{ display: "grid", gridTemplateColumns: "1fr", gap: 16, maxWidth: 560 }}
-      >
-        <ModeCard
-          mode="cpu"
-          title="CPU対戦"
-          description="すぐに一局始めます。相手待ちなしで、ログイン後の肩慣らしに向いています。"
-          accent={t.accent.gold}
-        />
-        <ModeCard
-          mode="friend"
-          title="友達対戦"
-          description="合言葉で待ち合わせます。同じ合言葉を入れた相手が参加すると対局が始まります。"
-          accent={t.accent.jade}
-        />
-      </form>
-
-      <section>
-        <ResumeGamesPanel />
-      </section>
+      <ModeSelectGameList />
     </main>
   );
 }
 
-function ModeCard({
-  mode,
-  title,
-  description,
-  accent,
-}: {
-  mode: GameMode;
-  title: string;
-  description: string;
-  accent: string;
-}) {
+function ModeSelectGameList() {
   const t = useTheme();
-  const selected = gameMode.value === mode;
+  const myGames = filterMyGames();
   return (
-    <div
-      onClick={() => { gameMode.value = mode; }}
-      style={{
-        display: "grid",
-        alignContent: "space-between",
-        gap: 16,
-        padding: 20,
-        borderRadius: R.lg,
-        border: `2px solid ${selected ? accent : t.border.default}`,
-        backgroundColor: selected ? t.bg.elevated : t.bg.secondary,
-        boxShadow: selected ? `${t.shadow.md}, 0 0 0 3px ${accent}22` : t.shadow.sm,
-        cursor: "pointer",
-        transition: `border-color ${MOTION.normal}, box-shadow ${MOTION.normal}, background-color ${MOTION.normal}`,
-      }}
-    >
-      <div style={{ display: "grid", gap: 12 }}>
-        <label
-          style={{
-            width: "100%",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 12,
-            padding: 0,
-            background: "transparent",
-            border: "none",
-            color: t.text.primary,
-            textAlign: "left",
-            cursor: "pointer",
-          }}
-        >
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-            <input
-              type="radio"
-              name="mode"
-              value={mode}
-              checked={selected}
-              onChange={() => { gameMode.value = mode; }}
-              style={{ accentColor: accent, flexShrink: 0 }}
-            />
-            <span style={{ fontFamily: fS, fontSize: 20, fontWeight: 800 }}>{title}</span>
-          </span>
-          <span
-            aria-hidden="true"
-            style={{
-              width: 36,
-              height: 36,
-              display: "grid",
-              placeItems: "center",
-              borderRadius: R.full,
-              border: `2px solid ${selected ? accent : t.border.default}`,
-              color: selected ? accent : t.text.tertiary,
-              fontFamily: fG,
-              fontSize: 15,
-              fontWeight: 900,
-              flexShrink: 0,
-              transition: `color ${MOTION.normal}, border-color ${MOTION.normal}`,
-            }}
-          >
-            {mode === "cpu" ? "歩" : "対"}
-          </span>
-        </label>
-        <p style={{ fontFamily: fG, fontSize: 14, lineHeight: 1.8, color: t.text.secondary }}>
-          {description}
-        </p>
+    <div style={{ paddingTop: 8 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+        <span style={{ fontFamily: fG, fontSize: 13, fontWeight: 600, color: t.text.secondary }}>
+          対局一覧
+        </span>
+        <Btn variant="ghost" size="sm" onClick={() => void refreshGames()} disabled={busy.value}>
+          更新
+        </Btn>
       </div>
-
-      {mode === "friend" ? (
-        <FieldGroup id="friend-passcode" label="合言葉" helpId="friend-passcode-help" help="12〜64文字。推測されにくい合言葉を相手だけに共有します。">
-          <Input
-            id="friend-passcode"
-            name="passcode"
-            required={selected}
-            disabled={!selected}
-            minLength={12}
-            maxLength={64}
-            autoComplete="off"
-            aria-describedby="friend-passcode-help"
-            onFocus={() => { gameMode.value = "friend"; }}
-            onClick={(e) => { e.stopPropagation(); }}
-          />
-        </FieldGroup>
+      {myGames.length === 0 ? (
+        <p style={{ fontFamily: fG, fontSize: 13, color: t.text.tertiary, textAlign: "center", padding: "16px 0" }}>
+          まだ対局はありません
+        </p>
       ) : (
-        <p style={{ fontFamily: fG, fontSize: 12, lineHeight: 1.7, color: t.text.tertiary }}>
-          作成するとそのまま対局画面へ進みます。
-        </p>
+        <GameList items={myGames} onSelect={(gameId) => void selectGame(gameId)} />
       )}
-
-      <Btn
-        variant={selected ? "primary" : "secondary"}
-        size="lg"
-        full
-        type={selected ? "submit" : "button"}
-        disabled={busy.value}
-        onClick={() => { gameMode.value = mode; }}
-      >
-        {mode === "cpu" ? "CPUと始める" : "合言葉で待ち合わせる"}
-      </Btn>
     </div>
-  );
-}
-
-function ResumeGamesPanel() {
-  const t = useTheme();
-  return (
-    <Card title="進行中・最近の対局" p={16}>
-      <div style={{ display: "grid", gap: 10 }}>
-        {games.value.length === 0 ? (
-          <p style={{ fontFamily: fG, fontSize: 13, color: t.text.tertiary, textAlign: "center", padding: "16px 0" }}>
-            まだ対局はありません
-          </p>
-        ) : (
-          <GameList onSelect={(gameId) => void selectGame(gameId)} />
-        )}
-        <div style={{ display: "flex", justifyContent: "flex-end", paddingTop: 4 }}>
-          <Btn variant="secondary" size="sm" onClick={() => void refreshGames()} disabled={busy.value}>
-            対局一覧を更新
-          </Btn>
-        </div>
-      </div>
-    </Card>
   );
 }
 
@@ -952,62 +855,41 @@ function PlayScreen() {
   return (
     <main
       className="play-layout"
-      style={{ maxWidth: 1380, margin: "0 auto", padding: "20px 24px 60px", alignItems: "start" }}
+      style={{ maxWidth: 1080, margin: "0 auto", padding: "12px 24px 60px" }}
     >
-      <div className="side-order-1"><GameListPanel /></div>
-      <div className="board-order"><BoardPanel /></div>
-      <div className="history-order"><HistoryPanel /></div>
+      <div style={{ alignSelf: "flex-start" }}><GameListPanel /></div>
+      <div className="play-board-row">
+        <BoardPanel />
+        <HistoryPanel />
+      </div>
     </main>
   );
 }
 
 // ─── Game list panel ──────────────────────────────────
 function GameListPanel() {
-  const t = useTheme();
-  const inBattle = activeGame.value?.status === "active" || activeGame.value?.status === "ended";
-
-  if (inBattle) {
-    return (
-      <div style={{ paddingTop: 4 }}>
-        <Btn variant="ghost" size="sm" onClick={() => { returnToModeSelect(); }} disabled={busy.value}>
-          ← モード選択へ
-        </Btn>
-      </div>
-    );
-  }
-
   return (
-    <Card>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-        <h2 style={{ fontFamily: fS, fontSize: 16, fontWeight: 700, color: t.text.primary }}>戦闘モード</h2>
-        <Btn variant="secondary" size="sm" onClick={() => { returnToModeSelect(); }} disabled={busy.value}>
-          ← モード選択へ
-        </Btn>
-      </div>
-
-      <div style={{ display: "grid", gap: 10, marginBottom: 14 }}>
-        <Btn variant="secondary" size="sm" onClick={() => void refreshGames()} disabled={busy.value}>
-          対局一覧を更新
-        </Btn>
-      </div>
-
-      <div style={{ display: "grid", gap: 6 }}>
-        {games.value.length === 0 && (
-          <p style={{ fontFamily: fG, fontSize: 13, color: t.text.tertiary, textAlign: "center", padding: "16px 0" }}>
-            まだ対局はありません
-          </p>
-        )}
-        <GameList onSelect={(gameId) => void selectGame(gameId)} />
-      </div>
-    </Card>
+    <div style={{ paddingTop: 4 }}>
+      <Btn variant="ghost" size="sm" onClick={() => { returnToModeSelect(); }} disabled={busy.value}>
+        ← モード選択へ
+      </Btn>
+    </div>
   );
 }
 
-function GameList({ onSelect }: { onSelect: (gameId: string) => void }) {
+function filterMyGames(): GameSummary[] {
+  const userId = user.value?.id;
+  if (!userId) return [];
+  return games.value.filter((game) =>
+    game.players.black.id === userId || game.players.white?.id === userId,
+  );
+}
+
+function GameList({ items, onSelect }: { items: GameSummary[]; onSelect: (gameId: string) => void }) {
   const t = useTheme();
   return (
     <>
-      {games.value.map((game) => {
+      {items.map((game) => {
         const active = activeGame.value?.id === game.id;
         return (
           <button
@@ -1460,32 +1342,31 @@ function HistoryPanel() {
   return (
     <div
       style={{
-        backgroundColor: t.bg.secondary,
-        borderRadius: R.lg,
-        border: `1px solid ${t.border.subtle}`,
         overflow: "hidden",
+        opacity: 0.7,
+        width: 150,
+        flexShrink: 0,
       }}
     >
       <div
         style={{
-          padding: "8px 12px",
-          borderBottom: `1px solid ${t.border.subtle}`,
+          padding: "4px 8px",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
         }}
       >
-        <span style={{ fontFamily: fG, fontSize: 11, fontWeight: 600, color: t.text.tertiary, letterSpacing: "0.04em" }}>
+        <span style={{ fontFamily: fG, fontSize: 10, fontWeight: 600, color: t.text.tertiary, letterSpacing: "0.04em" }}>
           棋譜
         </span>
         {game && (
-          <span style={{ fontFamily: fG, fontSize: 10, color: t.text.tertiary, fontVariantNumeric: "tabular-nums" }}>
+          <span style={{ fontFamily: fG, fontSize: 9, color: t.text.tertiary, fontVariantNumeric: "tabular-nums" }}>
             {game.moves.length}手
           </span>
         )}
       </div>
 
-      <div style={{ padding: "8px 12px" }}>
+      <div style={{ padding: "4px 8px" }}>
         {!game && (
           <p style={{ fontFamily: fG, fontSize: 12, color: t.text.tertiary, textAlign: "center", padding: "8px 0" }}>
             対局未選択
@@ -1511,24 +1392,29 @@ function HistoryPanel() {
                 <span
                   style={{
                     fontFamily: fG,
-                    fontSize: 9,
+                    fontSize: 8,
                     color: t.text.tertiary,
                     fontVariantNumeric: "tabular-nums",
                     flexShrink: 0,
+                    minWidth: 16,
                   }}
                 >
                   {move.ply}
                 </span>
-                <code
+                <span
                   title={moveUsiTitle(move)}
                   style={{
-                    fontFamily: `"SFMono-Regular", Consolas, monospace`,
+                    fontFamily: fS,
                     fontSize: 11,
-                    color: t.text.secondary,
+                    color: t.text.tertiary,
+                    letterSpacing: "0.02em",
                   }}
                 >
+                  <span style={{ color: move.ply % 2 === 1 ? t.text.secondary : t.text.tertiary }}>
+                    {move.ply % 2 === 1 ? "▲" : "△"}
+                  </span>
                   {moveNotationLabel(move)}
-                </code>
+                </span>
               </li>
             ))}
           </ol>
@@ -1676,17 +1562,11 @@ async function refreshGames(): Promise<void> {
   games.value = response.games;
 }
 
-async function submitCreateGame(event: SubmitEvent): Promise<void> {
-  event.preventDefault();
-  const form = new FormData(event.currentTarget as HTMLFormElement);
-  const mode = (form.get("mode") ?? "cpu") as GameMode;
-  const passcodeEntry = form.get("passcode");
-  const passcode = typeof passcodeEntry === "string" ? passcodeEntry.trim() : "";
+async function submitCreateGame(mode: GameMode, passcode?: string): Promise<void> {
   await withBusy(async () => {
-    gameMode.value = mode;
-    const response = await createGame({ mode, ...(mode === "friend" ? { passcode } : {}) });
+    const response = await createGame({ mode, ...(mode === "friend" && passcode ? { passcode } : {}) });
     applyGameSnapshot(response.game);
-    appStage.value = "battle";
+    appStage.value = "playing";
     connectRealtime(response.game.id);
     await refreshGames();
   });
@@ -1703,7 +1583,7 @@ async function selectGame(gameId: string): Promise<void> {
     analysisSnapshot.value = null;
     analysisSelectedSquare.value = null;
     analysisSelectedHand.value = null;
-    appStage.value = "battle";
+    appStage.value = "playing";
     connectRealtime(gameId);
     await refreshEvents();
   });
