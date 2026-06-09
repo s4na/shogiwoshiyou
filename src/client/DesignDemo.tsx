@@ -1397,11 +1397,12 @@ function PlaygroundPreview({
 }) {
   const t = useTheme();
   const width = viewportWidths[viewport];
-  const currentUser = user === "none" ? "nakata" : user === "guest" ? "guest_4821" : "nakata";
+  const currentUser = user === "none" ? userLabels.none : user === "guest" ? "guest_4821" : "nakata";
+  const userStatusColor = user === "none" ? t.semantic.offline : t.semantic.online;
   return (
     <div style={{ display: "grid", justifyItems: "center", gap: 10 }}>
       <div style={{ width: "100%", maxWidth: width, border: `2px solid ${t.border.default}`, borderRadius: R.xl, overflow: "hidden", boxShadow: t.shadow.lg, backgroundColor: t.bg.primary }}>
-        <AppHeaderMock userSlot={screen === "auth" ? undefined : <StatusChip color={t.semantic.online}>{currentUser}</StatusChip>} />
+        <AppHeaderMock userSlot={screen === "auth" ? undefined : <StatusChip color={userStatusColor}>{currentUser}</StatusChip>} />
         {screen === "auth" && (
           <PlaygroundAuthScreen
             error={error}
