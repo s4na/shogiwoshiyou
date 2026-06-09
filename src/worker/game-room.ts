@@ -3,6 +3,7 @@ import type {
   AnalysisSnapshot,
   BoardPiece,
   BoardSquare,
+  FriendRematchResponse,
   GameResponse,
   HandPiece,
   PlayerColor,
@@ -62,6 +63,10 @@ type ResignRequest = {
   requestId: string;
 };
 
+type FriendRematchRequest = {
+  gameId: string;
+};
+
 type AnalysisUpdateRequest = {
   requestId: string;
   baseRevision: number;
@@ -71,6 +76,12 @@ type AnalysisUpdateRequest = {
 
 type StoredAnalysisSnapshot = Omit<AnalysisSnapshot, "updatedBy"> & {
   updatedByUserId: string | null;
+};
+
+type StoredFriendRematch = {
+  gameId: string;
+  acceptedUserIds: string[];
+  nextGameId: string | null;
 };
 
 export class GameRoom implements DurableObject {
@@ -98,6 +109,10 @@ export class GameRoom implements DurableObject {
       }
       if (url.pathname === "/friend-lobby" && request.method === "POST") {
         return await this.createOrJoinFriendLobby(userId);
+      }
+      if (url.pathname === "/friend-rematch" && request.method === "POST") {
+        const body: Partial<FriendRematchRequest> = await request.json();
+        return await this.requestFriendRematch(userId, body);
       }
       if (url.pathname === "/move" && request.method === "POST") {
         const body: Partial<MoveRequest> = await request.json();
@@ -256,6 +271,78 @@ export class GameRoom implements DurableObject {
     const nextGameId = crypto.randomUUID();
     await this.state.storage.put("friendGameId", nextGameId);
     return this.forwardToGame(nextGameId, userId, "/friend");
+  }
+
+  private async requestFriendRematch(
+    userId: string,
+    body: Partial<FriendRematchRequest>,
+  ): Promise<Response> {
+    const gameId = validateGameId(body.gameId);
+    const game = await this.loadGameById(gameId);
+    if (!game) {
+      throw new RoomError(404, "game_not_found", "対局が見つかりません。");
+    }
+    this.ensureCanViewGame(game, userId);
+    if (game.mode !== "friend") {
+      throw new RoomError(409, "not_friend_game", "友達対戦ではありません。");
+    }
+    if (game.status !== "ended") {
+      throw new RoomError(409, "game_not_ended", "もう一局は終局後に選べます。");
+    }
+    if (!game.whiteUserId) {
+      throw new RoomError(409, "opponent_missing", "相手が参加していません。");
+    }
+
+    const key = friendRematchStorageKey(game.id);
+    const previous = await this.state.storage.get<StoredFriendRematch>(key);
+    const currentGameId = await this.state.storage.get<string>("friendGameId");
+    if (!previous && currentGameId !== game.id) {
+      throw new RoomError(403, "passcode_mismatch", "合言葉がこの対局と一致しません。");
+    }
+    if (previous?.nextGameId) {
+      return await this.startedFriendRematchResponse(previous.nextGameId, userId);
+    }
+
+    const acceptedUserIds = new Set(previous?.acceptedUserIds ?? []);
+    acceptedUserIds.add(userId);
+    const accepted = [...acceptedUserIds].filter((id) => id === game.blackUserId || id === game.whiteUserId);
+    if (accepted.length < 2) {
+      await this.state.storage.put(key, {
+        gameId: game.id,
+        acceptedUserIds: accepted,
+        nextGameId: null,
+      } satisfies StoredFriendRematch);
+      return Response.json(
+        {
+          ...(await this.snapshotPayload(game)),
+          rematch: { status: "waiting", acceptedCount: accepted.length, requiredCount: 2 },
+        } satisfies FriendRematchResponse,
+      );
+    }
+
+    const nextGameId = crypto.randomUUID();
+    await this.state.storage.put("friendGameId", nextGameId);
+    await this.state.storage.put(key, {
+      gameId: game.id,
+      acceptedUserIds: accepted,
+      nextGameId,
+    } satisfies StoredFriendRematch);
+    return await this.startedFriendRematchResponse(nextGameId, userId);
+  }
+
+  private async startedFriendRematchResponse(nextGameId: string, userId: string): Promise<Response> {
+    const response = await this.forwardToGame(nextGameId, userId, "/friend");
+    if (!response.ok) {
+      return response;
+    }
+    const payload: GameResponse = await response.json();
+    return Response.json(
+      {
+        ...payload,
+        rematch: { status: "started", acceptedCount: 2, requiredCount: 2 },
+      } satisfies FriendRematchResponse,
+      { status: response.status },
+    );
   }
 
   private async playMove(userId: string, body: Partial<MoveRequest>): Promise<Response> {
@@ -795,6 +882,17 @@ function validateUsi(value: string | undefined): string {
 
 function analysisStorageKey(gameId: string): string {
   return `analysis:${gameId}`;
+}
+
+function friendRematchStorageKey(gameId: string): string {
+  return `friend-rematch:${gameId}`;
+}
+
+function validateGameId(value: unknown): string {
+  if (typeof value !== "string" || !/^[0-9a-f-]{36}$/i.test(value)) {
+    throw new RoomError(400, "bad_game_id", "対局IDが不正です。");
+  }
+  return value;
 }
 
 function validateAnalysisBoard(value: unknown): BoardSquare[] {

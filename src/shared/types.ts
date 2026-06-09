@@ -142,6 +142,15 @@ export type MoveResponse = {
   game: GameSnapshot;
 };
 
+export type FriendRematchResponse = {
+  game: GameSnapshot;
+  rematch: {
+    status: "waiting" | "started";
+    acceptedCount: number;
+    requiredCount: number;
+  };
+};
+
 export type AnalysisSnapshot = {
   gameId: string;
   sourceGameVersion: number;

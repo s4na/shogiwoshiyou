@@ -499,6 +499,121 @@ describe("GameRoom moves", () => {
     expect(eventsBody.events?.map(publicEventSummary)).toEqual(expectedEvents);
     expect(whiteEvents.status).toBe(200);
     expect(whiteEventsBody.events?.map(publicEventSummary)).toEqual(expectedEvents);
+
+    const resigned = await app.request(
+      `${origin}/api/games/${gameId}/resign`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          cookie: black.cookie,
+          origin,
+        },
+        body: JSON.stringify({ requestId: "00000000-0000-4000-8000-000000000203" }),
+      },
+      env,
+    );
+    expect(resigned.status).toBe(200);
+
+    const wrongPasscodeRematch = await app.request(
+      `${origin}/api/games/${gameId}/rematch`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          cookie: black.cookie,
+          origin,
+        },
+        body: JSON.stringify({ passcode: "another-friend-passcode" }),
+      },
+      env,
+    );
+    const wrongPasscodeRematchBody: { error?: { code?: string } } = await wrongPasscodeRematch.json();
+
+    expect(wrongPasscodeRematch.status).toBe(403);
+    expect(wrongPasscodeRematchBody.error?.code).toBe("passcode_mismatch");
+
+    const firstRematch = await app.request(
+      `${origin}/api/games/${gameId}/rematch`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          cookie: black.cookie,
+          origin,
+        },
+        body: JSON.stringify({ passcode: passcode.trim() }),
+      },
+      env,
+    );
+    const firstRematchBody: {
+      game?: { id?: string };
+      rematch?: { status?: string; acceptedCount?: number; requiredCount?: number };
+    } = await firstRematch.json();
+
+    expect(firstRematch.status).toBe(200);
+    expect(firstRematchBody.game?.id).toBe(gameId);
+    expect(firstRematchBody.rematch).toEqual({
+      status: "waiting",
+      acceptedCount: 1,
+      requiredCount: 2,
+    });
+
+    const secondRematch = await app.request(
+      `${origin}/api/games/${gameId}/rematch`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          cookie: white.cookie,
+          origin,
+        },
+        body: JSON.stringify({ passcode: passcode.trim() }),
+      },
+      env,
+    );
+    const secondRematchBody: {
+      game?: { id?: string; status?: string; players?: { white?: unknown } };
+      rematch?: { status?: string; acceptedCount?: number; requiredCount?: number };
+    } = await secondRematch.json();
+    const rematchGameId = String(secondRematchBody.game?.id);
+
+    expect(secondRematch.status).toBe(201);
+    expect(rematchGameId).not.toBe(gameId);
+    expect(secondRematchBody.game?.status).toBe("waiting");
+    expect(secondRematchBody.game?.players?.white).toBeNull();
+    expect(secondRematchBody.rematch).toEqual({
+      status: "started",
+      acceptedCount: 2,
+      requiredCount: 2,
+    });
+
+    const firstJoinsRematch = await app.request(
+      `${origin}/api/games/${gameId}/rematch`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          cookie: black.cookie,
+          origin,
+        },
+        body: JSON.stringify({ passcode: passcode.trim() }),
+      },
+      env,
+    );
+    const firstJoinsRematchBody: {
+      game?: { id?: string; status?: string };
+      rematch?: { status?: string; acceptedCount?: number; requiredCount?: number };
+    } = await firstJoinsRematch.json();
+
+    expect(firstJoinsRematch.status).toBe(200);
+    expect(firstJoinsRematchBody.game?.id).toBe(rematchGameId);
+    expect(firstJoinsRematchBody.game?.status).toBe("active");
+    expect(firstJoinsRematchBody.rematch).toEqual({
+      status: "started",
+      acceptedCount: 2,
+      requiredCount: 2,
+    });
   });
 
   it("does not return a duplicate move snapshot to a non-player", async () => {

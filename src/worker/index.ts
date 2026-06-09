@@ -196,6 +196,16 @@ app.post("/api/games/:id/resign", zValidator("json", resignSchema, validationHoo
   });
 });
 
+app.post("/api/games/:id/rematch", zValidator("json", createGameSchema.pick({ passcode: true }), validationHook), async (c) => {
+  ensureSameOrigin(c);
+  const gameId = validGameId(c.req.param("id"));
+  const passcode = c.req.valid("json").passcode?.trim();
+  if (!passcode) {
+    throw new HttpError(400, "passcode_required", "もう一局には合言葉が必要です。");
+  }
+  return requestFriendRematch(c.env, c.get("user").id, passcode, gameId);
+});
+
 app.get("/api/games/:id/export.kif", async (c) => {
   const gameId = validGameId(c.req.param("id"));
   return callGameRoom(c.env, gameId, c.get("user").id, "/export/kif", { method: "GET" });
@@ -270,6 +280,19 @@ async function createOrJoinFriendGame(
   const gameId = friendGameId(await sha256Hex(passcode));
   return callGameRoom(env, gameId, userId, "/friend-lobby", {
     method: "POST",
+  });
+}
+
+async function requestFriendRematch(
+  env: Env,
+  userId: string,
+  passcode: string,
+  gameId: string,
+): Promise<Response> {
+  const lobbyId = friendGameId(await sha256Hex(passcode));
+  return callGameRoom(env, lobbyId, userId, "/friend-rematch", {
+    method: "POST",
+    body: JSON.stringify({ gameId }),
   });
 }
 
