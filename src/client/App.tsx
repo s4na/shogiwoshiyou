@@ -1340,7 +1340,8 @@ function ShogiBoard({
               const sq = square.square;
               const isLastMove = sq === lastFrom || sq === lastTo;
               const isLegalDestination = legalDestinations.has(sq);
-              const disabledByHandDrop = restrictingHandDropTargets && !isLegalDestination;
+              const disabledByHandDrop =
+                restrictingHandDropTargets && !isLegalDestination && square.piece?.color !== color;
               const analysisSelected = analysisMode.value && analysisSelectedSquare.value === square.square;
 
               let bgColor = "transparent";
@@ -1805,6 +1806,11 @@ async function handleSquareClick(square: string): Promise<void> {
   const myTurn = game.currentTurn === color;
   const boardSquare = game.board.find((candidate) => candidate.square === square);
   if (selectedHand.value) {
+    if (boardSquare?.piece?.color === color) {
+      selectedHand.value = null;
+      selectedSquare.value = square;
+      return;
+    }
     if (myTurn && legalDropDestinations(game, selectedHand.value).includes(square)) {
       await submitMove(dropUsi(selectedHand.value, square));
     }
