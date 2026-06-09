@@ -452,7 +452,7 @@ const BOARD_ACTIVE: BoardGrid = [
 
 const LAST_FROM: [number, number] = [6, 2];
 const LAST_TO:   [number, number] = [6, 3];
-const LEGAL_MVS: [number, number][] = [[2, 5], [2, 4]];
+const LEGAL_MVS: [number, number][] = [[4, 4], [0, 4]];
 
 // ─── Interactive board demo ───────────────────────────
 
@@ -937,7 +937,7 @@ function MockBoardPanel({ gameState }: { gameState: "my-turn"|"cpu-thinking"|"wo
       <MockHand
         side="black"
         pieces={gameState!=="waiting" ? [{ kanji:"歩", count:4 }, { kanji:"香", count:1 }, { kanji:"角", count:1 }] : []}
-        {...(gameState==="my-turn" ? { selectedKanji: "歩" } : {})}
+        {...(gameState==="my-turn" ? { selectedKanji: "角" } : {})}
       />
       {gameState==="won" && (
         <div
@@ -1090,7 +1090,7 @@ function ScreenFlows() {
         </div>
       </ScreenFrame>
 
-      <ScreenFrame label="④ 対局モード — あなたの手番（持ち駒の歩を選択、打てるマスだけ操作可能）">
+      <ScreenFrame label="④ 対局モード — あなたの手番（持ち駒の角を選択、打てるマスと自駒だけ操作可能）">
         <AppHeaderMock userSlot={<OnlineChip />} />
         <div style={{ backgroundColor: t.bg.primary, padding: 16, overflowX: "auto" }}>
           <PlayScreenMock gameState="my-turn" />
