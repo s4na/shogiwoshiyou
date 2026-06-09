@@ -135,6 +135,7 @@ export function App() {
     return () => {
       window.removeEventListener("popstate", onPopState);
       stopRematchPolling();
+      stopRematchInvitePolling();
       closeRealtime();
     };
   }, []);
@@ -1139,7 +1140,7 @@ function BoardPanel() {
                 type="button"
                 onClick={() => { dismissFriendRematchInvite(game.id, rematchInviteState.acceptedCount); }}
               >
-                あとで
+                閉じる
               </Btn>
             </div>
           </div>
@@ -1650,7 +1651,6 @@ async function submitCreateGame(mode: GameMode, passcode?: string): Promise<void
 async function selectGame(gameId: string): Promise<void> {
   await withBusy(async () => {
     const response = await getGame(gameId);
-    applyGameSnapshot(response.game);
     selectedSquare.value = null;
     selectedHand.value = null;
     promotionChoice.value = null;
@@ -1662,6 +1662,7 @@ async function selectGame(gameId: string): Promise<void> {
     stopRematchInvitePolling();
     friendRematch.value = null;
     friendRematchInvite.value = null;
+    applyGameSnapshot(response.game);
     appStage.value = "playing";
     connectRealtime(gameId);
     await refreshEvents();

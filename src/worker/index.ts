@@ -62,9 +62,13 @@ const profileSchema = z.object({
   displayName: displayNameSchema,
 });
 
+const weakPasscodeSchema = /^(?:012345|123456|234567|345678|456789|567890|654321|abcdef|abc123|password|qwerty)$/i;
+
 const createGameSchema = z.object({
   mode: z.enum(["cpu", "friend"]).default("cpu"),
-  passcode: z.string().trim().min(6).max(64).optional(),
+  passcode: z.string().trim().min(6).max(64).refine((value) => !weakPasscodeSchema.test(value), {
+    message: "推測されやすい合言葉は使えません。",
+  }).optional(),
 });
 
 const moveSchema = z.object({
