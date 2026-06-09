@@ -860,75 +860,37 @@ function MockGameListPanel({ showWaiting, inBattle }: { showWaiting?: boolean; i
   );
 }
 
-function MockModeCard({ mode, selected }: { mode: "cpu"|"friend"; selected?: boolean }) {
-  const t = useTheme();
-  const accent = mode==="cpu" ? t.accent.gold : t.accent.jade;
-  return (
-    <div style={{ display: "grid", alignContent: "space-between", gap: 16, padding: 18, borderRadius: R.lg, border: `2px solid ${selected ? accent : t.border.default}`, backgroundColor: selected ? t.bg.elevated : t.bg.secondary, boxShadow: selected ? `${t.shadow.md}, 0 0 0 3px ${accent}22` : t.shadow.sm }}>
-      <div style={{ display: "grid", gap: 10 }}>
-        <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, color: t.text.primary, cursor: "pointer" }}>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-            <input type="radio" readOnly checked={Boolean(selected)} name="mock-mode" style={{ accentColor: accent }} />
-            <span style={{ fontFamily: fS, fontSize: 20, fontWeight: 800 }}>{mode==="cpu" ? "CPU対戦" : "友達対戦"}</span>
-          </span>
-          <span aria-hidden="true" style={{ width: 36, height: 36, display: "grid", placeItems: "center", borderRadius: R.full, border: `2px solid ${selected ? accent : t.border.default}`, color: selected ? accent : t.text.tertiary, fontFamily: fG, fontSize: 15, fontWeight: 900 }}>
-            {mode==="cpu" ? "歩" : "対"}
-          </span>
-        </label>
-        <p style={{ fontFamily: fG, fontSize: 14, lineHeight: 1.8, color: t.text.secondary }}>
-          {mode==="cpu"
-            ? "すぐに一局始めます。相手待ちなしで、ログイン後の肩慣らしに向いています。"
-            : "合言葉で待ち合わせます。同じ合言葉を入れた相手が参加すると対局が始まります。"}
-        </p>
-      </div>
-      {mode==="friend" ? (
-        <FieldGroup id="mode-demo-passcode" label="合言葉" help="12〜64文字。推測されにくい合言葉を相手だけに共有します。">
-          <Input id="mode-demo-passcode" placeholder="secret-word-example-12" disabled={!selected} />
-        </FieldGroup>
-      ) : (
-        <p style={{ fontFamily: fG, fontSize: 12, lineHeight: 1.7, color: t.text.tertiary }}>作成するとそのまま対局画面へ進みます。</p>
-      )}
-      <Btn variant={selected ? "primary" : "secondary"} size="md" full>
-        {mode==="cpu" ? "CPUと始める" : "合言葉で待ち合わせる"}
-      </Btn>
-    </div>
-  );
-}
-
 function MockModeSelectScreen() {
   const t = useTheme();
-  const games = [
+  const myGames = [
     { id:"1", b:"nakata", w:"CPU", status:"active", moves:12, mode:"cpu" },
-    { id:"2", b:"nakata", w:null, status:"waiting", moves:0, mode:"friend" },
+    { id:"2", b:"nakata", w:"CPU", status:"ended", moves:45, mode:"cpu" },
   ];
   return (
-    <div style={{ backgroundColor: t.bg.primary, padding: "22px 24px 34px", display: "grid", gap: 18 }}>
-      <section style={{ display: "grid", gap: 6, borderBottom: `1px solid ${t.border.subtle}`, paddingBottom: 20 }}>
-        <p style={{ fontFamily: fG, fontSize: 13, fontWeight: 700, letterSpacing: "0.06em", color: t.accent.gold }}>モード選択</p>
-        <h2 style={{ fontFamily: fS, fontSize: 24, fontWeight: 700, color: t.text.primary }}>今日はどう指しますか</h2>
-        <p style={{ fontFamily: fG, fontSize: 14, lineHeight: 1.8, color: t.text.secondary }}>新しく始めるか、途中または最近の対局に戻るかを選んでから盤面へ進みます。</p>
-      </section>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 14, maxWidth: 560 }}>
-        <MockModeCard mode="cpu" selected />
-        <MockModeCard mode="friend" />
-      </div>
-      <div style={{ backgroundColor: t.bg.elevated, borderRadius: R.lg, border: `1px solid ${t.border.default}`, overflow: "hidden" }}>
-        <div style={{ padding: "10px 14px", borderBottom: `1px solid ${t.border.subtle}`, fontFamily: fG, fontSize: 12, fontWeight: 600, color: t.text.secondary }}>進行中・最近の対局</div>
-        <div style={{ display: "grid", gap: 6, padding: 14 }}>
-          {games.map((g) => (
-            <div key={g.id} style={{ display: "grid", gap: 4, padding: "8px 10px", backgroundColor: t.bg.tertiary, border: `1px solid ${t.border.subtle}`, borderRadius: R.md }}>
-              <span style={{ display: "flex", gap: 6, alignItems: "center", fontFamily: fG, fontSize: 12 }}>
-                <strong style={{ color: t.text.primary }}>{g.b}</strong>
-                <span style={{ color: t.text.tertiary }}>対</span>
-                <strong style={{ color: t.text.primary }}>{g.w ?? "相手待ち"}</strong>
-              </span>
-              <span style={{ fontFamily: fG, fontSize: 11, color: t.text.tertiary }}>
-                {g.mode==="cpu" ? "CPU対戦" : "友達対戦"} / {g.status==="waiting" ? "相手待ち" : `${String(g.moves)}手`}
-              </span>
-            </div>
-          ))}
-          <div style={{ display: "flex", justifyContent: "flex-end" }}>
-            <Btn variant="secondary" size="sm">対局一覧を更新</Btn>
+    <div style={{ backgroundColor: t.bg.primary, display: "flex", justifyContent: "center", padding: "48px 24px 34px" }}>
+      <div style={{ width: "min(480px, 100%)", display: "grid", gap: 12 }}>
+        <div style={{ display: "grid", gap: 10 }}>
+          <Btn variant="primary" size="lg" full>CPU対戦</Btn>
+          <Btn variant="secondary" size="lg" full>友達対戦</Btn>
+        </div>
+        <div style={{ paddingTop: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+            <span style={{ fontFamily: fG, fontSize: 13, fontWeight: 600, color: t.text.secondary }}>過去の対局</span>
+            <Btn variant="ghost" size="sm">更新</Btn>
+          </div>
+          <div style={{ display: "grid", gap: 6 }}>
+            {myGames.map((g) => (
+              <div key={g.id} style={{ display: "grid", gap: 4, padding: "10px 12px", backgroundColor: t.bg.tertiary, border: `1px solid ${t.border.subtle}`, borderRadius: R.md }}>
+                <span style={{ display: "flex", gap: 6, alignItems: "center", fontFamily: fG, fontSize: 13 }}>
+                  <strong style={{ color: t.text.primary }}>{g.b}</strong>
+                  <span style={{ color: t.text.tertiary }}>対</span>
+                  <strong style={{ color: t.text.primary }}>{g.w}</strong>
+                </span>
+                <span style={{ fontFamily: fG, fontSize: 11, color: t.text.tertiary }}>
+                  {g.mode==="cpu" ? "CPU対戦" : "友達対戦"} / {g.status==="ended" ? "終局" : `${String(g.moves)}手`}
+                </span>
+              </div>
+            ))}
           </div>
         </div>
       </div>

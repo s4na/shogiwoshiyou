@@ -746,204 +746,114 @@ function renderTermsList(lines: string[], startIndex: number, indent: number, t:
 // ─── Mode selection ───────────────────────────────────
 function ModeSelectScreen() {
   const t = useTheme();
+  const [passcodeOpen, setPasscodeOpen] = useState(false);
   return (
     <main
       style={{
-        width: "min(1120px, 100%)",
+        width: "min(480px, 100%)",
         margin: "0 auto",
-        padding: "28px 24px 64px",
+        padding: "48px 24px 64px",
         display: "grid",
-        gap: 24,
+        gap: 12,
       }}
     >
-      <section
-        style={{
-          display: "grid",
-          gap: 8,
-          borderBottom: `1px solid ${t.border.subtle}`,
-          paddingBottom: 20,
-        }}
-      >
-        <p
-          style={{
-            fontFamily: fG,
-            fontSize: 13,
-            fontWeight: 700,
-            letterSpacing: "0.06em",
-            color: t.accent.gold,
-          }}
-        >
-          モード選択
-        </p>
-        <h2 style={{ fontFamily: fS, fontSize: "clamp(1.5rem, 1.2rem + 1vw, 2rem)", fontWeight: 700, color: t.text.primary }}>
-          今日はどう指しますか
-        </h2>
-        <p style={{ maxWidth: 560, fontFamily: fG, fontSize: 14, lineHeight: 1.8, color: t.text.secondary }}>
-          新しく始めるか、途中または最近の対局に戻るかを選んでから盤面へ進みます。
-        </p>
-      </section>
-
       <form
         onSubmit={(event) => void submitCreateGame(event)}
         aria-label="対戦モード"
-        style={{ display: "grid", gridTemplateColumns: "1fr", gap: 16, maxWidth: 560 }}
+        style={{ display: "grid", gap: 10 }}
       >
-        <ModeCard
-          mode="cpu"
-          title="CPU対戦"
-          description="すぐに一局始めます。相手待ちなしで、ログイン後の肩慣らしに向いています。"
-          accent={t.accent.gold}
-        />
-        <ModeCard
-          mode="friend"
-          title="友達対戦"
-          description="合言葉で待ち合わせます。同じ合言葉を入れた相手が参加すると対局が始まります。"
-          accent={t.accent.jade}
-        />
+        <input type="hidden" name="mode" value={gameMode.value} />
+        <Btn
+          variant="primary"
+          size="lg"
+          full
+          type="submit"
+          disabled={busy.value}
+          onClick={() => { gameMode.value = "cpu"; }}
+        >
+          CPU対戦
+        </Btn>
+        {!passcodeOpen ? (
+          <Btn
+            variant="secondary"
+            size="lg"
+            full
+            type="button"
+            onClick={() => { gameMode.value = "friend"; setPasscodeOpen(true); }}
+          >
+            友達対戦
+          </Btn>
+        ) : (
+          <div
+            style={{
+              display: "grid",
+              gap: 10,
+              padding: 16,
+              borderRadius: R.lg,
+              border: `1px solid ${t.accent.jade}`,
+              backgroundColor: t.bg.elevated,
+            }}
+          >
+            <FieldGroup id="friend-passcode" label="合言葉" helpId="friend-passcode-help" help="12〜64文字。推測されにくい合言葉を相手だけに共有します。">
+              <Input
+                id="friend-passcode"
+                name="passcode"
+                required
+                minLength={12}
+                maxLength={64}
+                autoComplete="off"
+                aria-describedby="friend-passcode-help"
+              />
+            </FieldGroup>
+            <div style={{ display: "flex", gap: 8 }}>
+              <Btn
+                variant="primary"
+                size="md"
+                full
+                type="submit"
+                disabled={busy.value}
+                onClick={() => { gameMode.value = "friend"; }}
+              >
+                待ち合わせる
+              </Btn>
+              <Btn
+                variant="ghost"
+                size="md"
+                type="button"
+                onClick={() => { setPasscodeOpen(false); gameMode.value = "cpu"; }}
+              >
+                戻る
+              </Btn>
+            </div>
+          </div>
+        )}
       </form>
-
-      <section>
-        <ResumeGamesPanel />
-      </section>
+      <ModeSelectGameList />
     </main>
   );
 }
 
-function ModeCard({
-  mode,
-  title,
-  description,
-  accent,
-}: {
-  mode: GameMode;
-  title: string;
-  description: string;
-  accent: string;
-}) {
+function ModeSelectGameList() {
   const t = useTheme();
-  const selected = gameMode.value === mode;
+  const myGames = filterMyGames();
   return (
-    <div
-      onClick={() => { gameMode.value = mode; }}
-      style={{
-        display: "grid",
-        alignContent: "space-between",
-        gap: 16,
-        padding: 20,
-        borderRadius: R.lg,
-        border: `2px solid ${selected ? accent : t.border.default}`,
-        backgroundColor: selected ? t.bg.elevated : t.bg.secondary,
-        boxShadow: selected ? `${t.shadow.md}, 0 0 0 3px ${accent}22` : t.shadow.sm,
-        cursor: "pointer",
-        transition: `border-color ${MOTION.normal}, box-shadow ${MOTION.normal}, background-color ${MOTION.normal}`,
-      }}
-    >
-      <div style={{ display: "grid", gap: 12 }}>
-        <label
-          style={{
-            width: "100%",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 12,
-            padding: 0,
-            background: "transparent",
-            border: "none",
-            color: t.text.primary,
-            textAlign: "left",
-            cursor: "pointer",
-          }}
-        >
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-            <input
-              type="radio"
-              name="mode"
-              value={mode}
-              checked={selected}
-              onChange={() => { gameMode.value = mode; }}
-              style={{ accentColor: accent, flexShrink: 0 }}
-            />
-            <span style={{ fontFamily: fS, fontSize: 20, fontWeight: 800 }}>{title}</span>
-          </span>
-          <span
-            aria-hidden="true"
-            style={{
-              width: 36,
-              height: 36,
-              display: "grid",
-              placeItems: "center",
-              borderRadius: R.full,
-              border: `2px solid ${selected ? accent : t.border.default}`,
-              color: selected ? accent : t.text.tertiary,
-              fontFamily: fG,
-              fontSize: 15,
-              fontWeight: 900,
-              flexShrink: 0,
-              transition: `color ${MOTION.normal}, border-color ${MOTION.normal}`,
-            }}
-          >
-            {mode === "cpu" ? "歩" : "対"}
-          </span>
-        </label>
-        <p style={{ fontFamily: fG, fontSize: 14, lineHeight: 1.8, color: t.text.secondary }}>
-          {description}
-        </p>
+    <div style={{ paddingTop: 8 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+        <span style={{ fontFamily: fG, fontSize: 13, fontWeight: 600, color: t.text.secondary }}>
+          過去の対局
+        </span>
+        <Btn variant="ghost" size="sm" onClick={() => void refreshGames()} disabled={busy.value}>
+          更新
+        </Btn>
       </div>
-
-      {mode === "friend" ? (
-        <FieldGroup id="friend-passcode" label="合言葉" helpId="friend-passcode-help" help="12〜64文字。推測されにくい合言葉を相手だけに共有します。">
-          <Input
-            id="friend-passcode"
-            name="passcode"
-            required={selected}
-            disabled={!selected}
-            minLength={12}
-            maxLength={64}
-            autoComplete="off"
-            aria-describedby="friend-passcode-help"
-            onFocus={() => { gameMode.value = "friend"; }}
-            onClick={(e) => { e.stopPropagation(); }}
-          />
-        </FieldGroup>
+      {myGames.length === 0 ? (
+        <p style={{ fontFamily: fG, fontSize: 13, color: t.text.tertiary, textAlign: "center", padding: "16px 0" }}>
+          まだ対局はありません
+        </p>
       ) : (
-        <p style={{ fontFamily: fG, fontSize: 12, lineHeight: 1.7, color: t.text.tertiary }}>
-          作成するとそのまま対局画面へ進みます。
-        </p>
+        <GameList onSelect={(gameId) => void selectGame(gameId)} />
       )}
-
-      <Btn
-        variant={selected ? "primary" : "secondary"}
-        size="lg"
-        full
-        type={selected ? "submit" : "button"}
-        disabled={busy.value}
-        onClick={() => { gameMode.value = mode; }}
-      >
-        {mode === "cpu" ? "CPUと始める" : "合言葉で待ち合わせる"}
-      </Btn>
     </div>
-  );
-}
-
-function ResumeGamesPanel() {
-  const t = useTheme();
-  return (
-    <Card title="進行中・最近の対局" p={16}>
-      <div style={{ display: "grid", gap: 10 }}>
-        {games.value.length === 0 ? (
-          <p style={{ fontFamily: fG, fontSize: 13, color: t.text.tertiary, textAlign: "center", padding: "16px 0" }}>
-            まだ対局はありません
-          </p>
-        ) : (
-          <GameList onSelect={(gameId) => void selectGame(gameId)} />
-        )}
-        <div style={{ display: "flex", justifyContent: "flex-end", paddingTop: 4 }}>
-          <Btn variant="secondary" size="sm" onClick={() => void refreshGames()} disabled={busy.value}>
-            対局一覧を更新
-          </Btn>
-        </div>
-      </div>
-    </Card>
   );
 }
 
@@ -1003,11 +913,20 @@ function GameListPanel() {
   );
 }
 
+function filterMyGames(): GameSummary[] {
+  const userId = user.value?.id;
+  if (!userId) return [];
+  return games.value.filter((game) =>
+    game.players.black.id === userId || game.players.white?.id === userId,
+  );
+}
+
 function GameList({ onSelect }: { onSelect: (gameId: string) => void }) {
   const t = useTheme();
+  const myGames = filterMyGames();
   return (
     <>
-      {games.value.map((game) => {
+      {myGames.map((game) => {
         const active = activeGame.value?.id === game.id;
         return (
           <button
