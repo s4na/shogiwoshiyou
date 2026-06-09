@@ -39,7 +39,6 @@ import {
   useTheme,
   ShogiPiece,
   Btn,
-  Card,
   Toast,
   Modal,
   StatusChip,
@@ -757,19 +756,13 @@ function ModeSelectScreen() {
         gap: 12,
       }}
     >
-      <form
-        onSubmit={(event) => void submitCreateGame(event)}
-        aria-label="対戦モード"
-        style={{ display: "grid", gap: 10 }}
-      >
-        <input type="hidden" name="mode" value={gameMode.value} />
+      <div aria-label="対戦モード" style={{ display: "grid", gap: 10 }}>
         <Btn
           variant="primary"
           size="lg"
           full
-          type="submit"
           disabled={busy.value}
-          onClick={() => { gameMode.value = "cpu"; }}
+          onClick={() => void submitCreateGame("cpu")}
         >
           CPU対戦
         </Btn>
@@ -778,13 +771,19 @@ function ModeSelectScreen() {
             variant="secondary"
             size="lg"
             full
-            type="button"
-            onClick={() => { gameMode.value = "friend"; setPasscodeOpen(true); }}
+            onClick={() => { setPasscodeOpen(true); }}
           >
             友達対戦
           </Btn>
         ) : (
-          <div
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              const form = new FormData(event.currentTarget);
+              const entry = form.get("passcode");
+              const passcode = typeof entry === "string" ? entry.trim() : "";
+              void submitCreateGame("friend", passcode);
+            }}
             style={{
               display: "grid",
               gap: 10,
@@ -812,7 +811,6 @@ function ModeSelectScreen() {
                 full
                 type="submit"
                 disabled={busy.value}
-                onClick={() => { gameMode.value = "friend"; }}
               >
                 待ち合わせる
               </Btn>
@@ -820,14 +818,14 @@ function ModeSelectScreen() {
                 variant="ghost"
                 size="md"
                 type="button"
-                onClick={() => { setPasscodeOpen(false); gameMode.value = "cpu"; }}
+                onClick={() => { setPasscodeOpen(false); }}
               >
                 戻る
               </Btn>
             </div>
-          </div>
+          </form>
         )}
-      </form>
+      </div>
       <ModeSelectGameList />
     </main>
   );
@@ -851,7 +849,7 @@ function ModeSelectGameList() {
           まだ対局はありません
         </p>
       ) : (
-        <GameList onSelect={(gameId) => void selectGame(gameId)} />
+        <GameList items={myGames} onSelect={(gameId) => void selectGame(gameId)} />
       )}
     </div>
   );
@@ -873,43 +871,12 @@ function PlayScreen() {
 
 // ─── Game list panel ──────────────────────────────────
 function GameListPanel() {
-  const t = useTheme();
-  const inBattle = activeGame.value?.status === "active" || activeGame.value?.status === "ended";
-
-  if (inBattle) {
-    return (
-      <div style={{ paddingTop: 4 }}>
-        <Btn variant="ghost" size="sm" onClick={() => { returnToModeSelect(); }} disabled={busy.value}>
-          ← モード選択へ
-        </Btn>
-      </div>
-    );
-  }
-
   return (
-    <Card>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-        <h2 style={{ fontFamily: fS, fontSize: 16, fontWeight: 700, color: t.text.primary }}>戦闘モード</h2>
-        <Btn variant="secondary" size="sm" onClick={() => { returnToModeSelect(); }} disabled={busy.value}>
-          ← モード選択へ
-        </Btn>
-      </div>
-
-      <div style={{ display: "grid", gap: 10, marginBottom: 14 }}>
-        <Btn variant="secondary" size="sm" onClick={() => void refreshGames()} disabled={busy.value}>
-          対局一覧を更新
-        </Btn>
-      </div>
-
-      <div style={{ display: "grid", gap: 6 }}>
-        {games.value.length === 0 && (
-          <p style={{ fontFamily: fG, fontSize: 13, color: t.text.tertiary, textAlign: "center", padding: "16px 0" }}>
-            まだ対局はありません
-          </p>
-        )}
-        <GameList onSelect={(gameId) => void selectGame(gameId)} />
-      </div>
-    </Card>
+    <div style={{ paddingTop: 4 }}>
+      <Btn variant="ghost" size="sm" onClick={() => { returnToModeSelect(); }} disabled={busy.value}>
+        ← モード選択へ
+      </Btn>
+    </div>
   );
 }
 
@@ -921,12 +888,11 @@ function filterMyGames(): GameSummary[] {
   );
 }
 
-function GameList({ onSelect }: { onSelect: (gameId: string) => void }) {
+function GameList({ items, onSelect }: { items: GameSummary[]; onSelect: (gameId: string) => void }) {
   const t = useTheme();
-  const myGames = filterMyGames();
   return (
     <>
-      {myGames.map((game) => {
+      {items.map((game) => {
         const active = activeGame.value?.id === game.id;
         return (
           <button
@@ -1434,20 +1400,25 @@ function HistoryPanel() {
                     color: t.text.tertiary,
                     fontVariantNumeric: "tabular-nums",
                     flexShrink: 0,
+                    minWidth: 20,
                   }}
                 >
                   {move.ply}
                 </span>
-                <code
+                <span
                   title={moveUsiTitle(move)}
                   style={{
-                    fontFamily: `"SFMono-Regular", Consolas, monospace`,
-                    fontSize: 11,
+                    fontFamily: fS,
+                    fontSize: 13,
                     color: t.text.secondary,
+                    letterSpacing: "0.02em",
                   }}
                 >
+                  <span style={{ color: move.ply % 2 === 1 ? t.text.primary : t.text.tertiary }}>
+                    {move.ply % 2 === 1 ? "▲" : "△"}
+                  </span>
                   {moveNotationLabel(move)}
-                </code>
+                </span>
               </li>
             ))}
           </ol>
@@ -1595,15 +1566,10 @@ async function refreshGames(): Promise<void> {
   games.value = response.games;
 }
 
-async function submitCreateGame(event: SubmitEvent): Promise<void> {
-  event.preventDefault();
-  const form = new FormData(event.currentTarget as HTMLFormElement);
-  const mode = (form.get("mode") ?? "cpu") as GameMode;
-  const passcodeEntry = form.get("passcode");
-  const passcode = typeof passcodeEntry === "string" ? passcodeEntry.trim() : "";
+async function submitCreateGame(mode: GameMode, passcode?: string): Promise<void> {
   await withBusy(async () => {
     gameMode.value = mode;
-    const response = await createGame({ mode, ...(mode === "friend" ? { passcode } : {}) });
+    const response = await createGame({ mode, ...(mode === "friend" && passcode ? { passcode } : {}) });
     applyGameSnapshot(response.game);
     appStage.value = "battle";
     connectRealtime(response.game.id);

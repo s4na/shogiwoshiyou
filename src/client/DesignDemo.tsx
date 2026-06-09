@@ -813,49 +813,10 @@ function OnlineChip() {
 
 // ─── Panel mockups ────────────────────────────────────
 
-function MockGameListPanel({ showWaiting, inBattle }: { showWaiting?: boolean; inBattle?: boolean }) {
-  const t = useTheme();
-  const games = showWaiting
-    ? [
-      { id:"3", b:"nakata", w:null, status:"waiting", moves:0, mode:"friend", sel:true },
-      { id:"2", b:"nakata", w:"CPU", status:"ended", moves:45, mode:"cpu", sel:false },
-    ]
-    : [
-      { id:"1", b:"nakata", w:"CPU", status:"active", moves:12, mode:"cpu", sel:true },
-      { id:"2", b:"nakata", w:"CPU", status:"ended", moves:45, mode:"cpu", sel:false },
-    ];
-
-  if (inBattle) {
-    return (
-      <div style={{ paddingTop: 4 }}>
-        <Btn variant="ghost" size="sm">← モード選択へ</Btn>
-      </div>
-    );
-  }
-
+function MockGameListPanel() {
   return (
-    <div style={{ backgroundColor: t.bg.elevated, borderRadius: R.lg, border: `1px solid ${t.border.default}`, padding: 14 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-        <h2 style={{ fontFamily: fS, fontSize: 15, fontWeight: 700, color: t.text.primary }}>戦闘モード</h2>
-        <Btn variant="secondary" size="sm">← モード選択へ</Btn>
-      </div>
-      <div style={{ display: "grid", gap: 10, marginBottom: 12 }}>
-        <Btn variant="secondary" size="sm">対局一覧を更新</Btn>
-      </div>
-      <div style={{ display: "grid", gap: 6 }}>
-        {games.map((g) => (
-          <div key={g.id} style={{ display: "grid", gap: 4, padding: "8px 10px", backgroundColor: g.sel ? t.accent.jadeDim : t.bg.tertiary, border: `1px solid ${g.sel ? t.accent.jade : t.border.subtle}`, borderRadius: R.md }}>
-            <span style={{ display: "flex", gap: 6, alignItems: "center", fontFamily: fG, fontSize: 12 }}>
-              <strong style={{ color: t.text.primary }}>{g.b}</strong>
-              <span style={{ color: t.text.tertiary }}>対</span>
-              <strong style={{ color: t.text.primary }}>{g.w ?? "相手待ち"}</strong>
-            </span>
-            <span style={{ fontFamily: fG, fontSize: 11, color: t.text.tertiary }}>
-              {g.mode==="cpu" ? "CPU対戦" : "友達対戦"} / {g.status==="waiting" ? "相手待ち" : g.status==="active" ? `${String(g.moves)}手` : "終局"}
-            </span>
-          </div>
-        ))}
-      </div>
+    <div style={{ paddingTop: 4 }}>
+      <Btn variant="ghost" size="sm">← モード選択へ</Btn>
     </div>
   );
 }
@@ -864,7 +825,8 @@ function MockModeSelectScreen() {
   const t = useTheme();
   const myGames = [
     { id:"1", b:"nakata", w:"CPU", status:"active", moves:12, mode:"cpu" },
-    { id:"2", b:"nakata", w:"CPU", status:"ended", moves:45, mode:"cpu" },
+    { id:"2", b:"nakata", w:null, status:"waiting", moves:0, mode:"friend" },
+    { id:"3", b:"nakata", w:"CPU", status:"ended", moves:45, mode:"cpu" },
   ];
   return (
     <div style={{ backgroundColor: t.bg.primary, display: "flex", justifyContent: "center", padding: "48px 24px 34px" }}>
@@ -884,10 +846,10 @@ function MockModeSelectScreen() {
                 <span style={{ display: "flex", gap: 6, alignItems: "center", fontFamily: fG, fontSize: 13 }}>
                   <strong style={{ color: t.text.primary }}>{g.b}</strong>
                   <span style={{ color: t.text.tertiary }}>対</span>
-                  <strong style={{ color: t.text.primary }}>{g.w}</strong>
+                  <strong style={{ color: t.text.primary }}>{g.w ?? "相手待ち"}</strong>
                 </span>
                 <span style={{ fontFamily: fG, fontSize: 11, color: t.text.tertiary }}>
-                  {g.mode==="cpu" ? "CPU対戦" : "友達対戦"} / {g.status==="ended" ? "終局" : `${String(g.moves)}手`}
+                  {g.mode==="cpu" ? "CPU対戦" : "友達対戦"} / {g.status==="waiting" ? "相手待ち" : g.status==="ended" ? "終局" : `${String(g.moves)}手`}
                 </span>
               </div>
             ))}
@@ -942,10 +904,10 @@ function MockBoardPanel({ gameState }: { gameState: "my-turn"|"cpu-thinking"|"wo
 }
 
 const MOCK_MOVES = [
-  {ply:1,usi:"7g7f"},{ply:2,usi:"3c3d"},{ply:3,usi:"2g2f"},
-  {ply:4,usi:"8c8d"},{ply:5,usi:"2f2e"},{ply:6,usi:"8d8e"},
-  {ply:7,usi:"2e2d"},{ply:8,usi:"2c2d"},{ply:9,usi:"B*4e"},
-  {ply:10,usi:"2d2e"},{ply:11,usi:"P*2f"},{ply:12,usi:"2e3e"},
+  {ply:1,usi:"7g7f",notation:"７六歩"},{ply:2,usi:"3c3d",notation:"３四歩"},{ply:3,usi:"2g2f",notation:"２六歩"},
+  {ply:4,usi:"8c8d",notation:"８四歩"},{ply:5,usi:"2f2e",notation:"２五歩"},{ply:6,usi:"8d8e",notation:"８五歩"},
+  {ply:7,usi:"2e2d",notation:"２四歩"},{ply:8,usi:"2c2d",notation:"同歩"},{ply:9,usi:"B*4e",notation:"角打"},
+  {ply:10,usi:"2d2e",notation:"２五歩"},{ply:11,usi:"P*2f",notation:"歩打"},{ply:12,usi:"2e3e",notation:"３五歩"},
 ];
 
 function MockHistoryPanel() {
@@ -960,8 +922,11 @@ function MockHistoryPanel() {
         <ol style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 1, maxHeight: 280, overflowY: "auto" }}>
           {MOCK_MOVES.map((m) => (
             <li key={m.ply} style={{ display: "flex", alignItems: "center", gap: 6, padding: "2px 4px", borderRadius: R.sm, backgroundColor: m.ply===MOCK_MOVES.length ? t.accent.goldDim : "transparent" }}>
-              <span style={{ fontFamily: fG, fontSize: 9, color: t.text.tertiary, fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>{m.ply}</span>
-              <code style={{ fontFamily: `"SFMono-Regular",Consolas,monospace`, fontSize: 11, color: t.text.secondary }}>{m.usi}</code>
+              <span style={{ fontFamily: fG, fontSize: 9, color: t.text.tertiary, fontVariantNumeric: "tabular-nums", flexShrink: 0, minWidth: 20 }}>{m.ply}</span>
+              <span title={m.usi} style={{ fontFamily: fS, fontSize: 13, color: t.text.secondary, letterSpacing: "0.02em" }}>
+                <span style={{ color: m.ply % 2 === 1 ? t.text.primary : t.text.tertiary }}>{m.ply % 2 === 1 ? "▲" : "△"}</span>
+                {m.notation}
+              </span>
             </li>
           ))}
         </ol>
@@ -975,7 +940,7 @@ function MockHistoryPanel() {
 function PlayScreenMock({ gameState }: { gameState: "my-turn"|"cpu-thinking"|"won"|"waiting" }) {
   return (
     <div style={{ display: "grid", gridTemplateColumns: "180px 290px 140px", gap: 12, alignItems: "start", minWidth: 634 }}>
-      <MockGameListPanel showWaiting={gameState==="waiting"} inBattle={gameState==="my-turn" || gameState==="cpu-thinking" || gameState==="won"} />
+      <MockGameListPanel />
       <MockBoardPanel gameState={gameState} />
       <MockHistoryPanel />
     </div>
