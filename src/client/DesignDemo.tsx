@@ -1192,6 +1192,7 @@ function PlaygroundModeScreen({
 }) {
   const t = useTheme();
   const compact = density === "compact";
+  const canStart = user !== "none";
   const myGames = [
     { id: "1", opponent: "CPU", status: "12手 / 自分の手番" },
     { id: "2", opponent: "相手待ち", status: "友達対戦 / 合言葉あり" },
@@ -1202,14 +1203,19 @@ function PlaygroundModeScreen({
       <div style={{ width: "min(520px, 100%)", display: "grid", gap: compact ? 10 : 14 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
           <div>
-            <p style={{ margin: 0, color: t.text.primary, fontFamily: fS, fontSize: 18, fontWeight: 800 }}>{userLabels[user]}でプレイ中</p>
+            <p style={{ margin: 0, color: t.text.primary, fontFamily: fS, fontSize: 18, fontWeight: 800 }}>{userLabels[user]}状態を確認中</p>
             <p style={{ margin: "4px 0 0", color: t.text.tertiary, fontFamily: fG, fontSize: 11 }}>実データなしの状態確認用モック</p>
           </div>
-          <StatusChip color={t.semantic.online}>接続</StatusChip>
+          <StatusChip color={canStart ? t.semantic.online : t.semantic.offline}>{canStart ? "接続" : "認証前"}</StatusChip>
         </div>
+        {!canStart && (
+          <div role="alert" style={{ padding: "10px 12px", borderRadius: R.md, border: `1px solid ${t.border.default}`, backgroundColor: t.bg.tertiary, color: t.text.secondary, fontFamily: fG, fontSize: 12, fontWeight: 700 }}>
+            対局開始前に認証画面へ進む想定です。
+          </div>
+        )}
         <div style={{ display: "grid", gap: 10 }}>
-          <Btn variant="primary" size={compact ? "md" : "lg"} full onClick={onCpu}>CPU対戦を始める</Btn>
-          <Btn variant="secondary" size={compact ? "md" : "lg"} full onClick={onFriend}>友達対戦の合言葉へ</Btn>
+          <Btn variant="primary" size={compact ? "md" : "lg"} full disabled={!canStart} onClick={onCpu}>CPU対戦を始める</Btn>
+          <Btn variant="secondary" size={compact ? "md" : "lg"} full disabled={!canStart} onClick={onFriend}>友達対戦の合言葉へ</Btn>
         </div>
         <div style={{ display: "grid", gap: 6, paddingTop: compact ? 4 : 10 }}>
           <span style={{ fontFamily: fG, fontSize: 12, fontWeight: 700, color: t.text.secondary }}>対局一覧</span>
@@ -1218,6 +1224,7 @@ function PlaygroundModeScreen({
               key={game.id}
               type="button"
               onClick={onResume}
+              disabled={!canStart}
               style={{
                 display: "grid",
                 gap: 3,
@@ -1226,7 +1233,8 @@ function PlaygroundModeScreen({
                 borderRadius: R.md,
                 border: `1px solid ${t.border.subtle}`,
                 backgroundColor: t.bg.tertiary,
-                cursor: "pointer",
+                cursor: canStart ? "pointer" : "not-allowed",
+                opacity: canStart ? 1 : 0.55,
                 textAlign: "left",
               }}
             >
@@ -1410,7 +1418,7 @@ function PlaygroundPreview({
         )}
         {screen === "mode" && (
           <PlaygroundModeScreen
-            user={user === "none" ? "registered" : user}
+            user={user}
             density={density}
             onCpu={() => {
               setGameState("my-turn");
