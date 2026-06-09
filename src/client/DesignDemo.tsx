@@ -707,7 +707,7 @@ function cellEq(cell: [number, number] | undefined, c: number, r: number): boole
 }
 
 function StaticBoard({
-  grid, selected, lastFrom, lastTo, legalMoves, checkCell, cellSize = 36, restrictToLegalMoves, onCellClick,
+  grid, selected, lastFrom, lastTo, legalMoves, checkCell, cellSize = 36, switchableColor, onCellClick,
 }: {
   grid: BoardGrid;
   selected?: [number, number];
@@ -716,7 +716,7 @@ function StaticBoard({
   legalMoves?: [number, number][];
   checkCell?: [number, number];
   cellSize?: number;
-  restrictToLegalMoves?: boolean;
+  switchableColor?: MockPiece["color"];
   onCellClick?: (ci: number, ri: number) => void;
 }) {
   const t = useTheme();
@@ -738,8 +738,9 @@ function StaticBoard({
             const isLast  = cellEq(lastFrom,  ci, ri) || cellEq(lastTo, ci, ri);
             const isLegal = legalMoves?.some(([lc,lr]) => lc===ci && lr===ri) ?? false;
             const isCheck = cellEq(checkCell, ci, ri);
-            const canSwitchSelection = Boolean(restrictToLegalMoves && piece?.color === "b");
-            const disabledTarget = Boolean(restrictToLegalMoves && !isLegal && !canSwitchSelection);
+            const restrictingTargets = switchableColor !== undefined;
+            const canSwitchSelection = restrictingTargets && piece?.color === switchableColor;
+            const disabledTarget = restrictingTargets && !isLegal && !canSwitchSelection;
             const targetCursor = disabledTarget ? "not-allowed" : isLegal || canSwitchSelection || onCellClick ? "pointer" : "default";
             const bg = isSel ? t.semantic.selected : isCheck ? t.semantic.check : isLast ? t.semantic.lastMove : isLegal ? t.semantic.legalMove : "transparent";
             return (
@@ -932,7 +933,7 @@ function MockBoardPanel({ gameState }: { gameState: "my-turn"|"cpu-thinking"|"wo
       } />
       <StaticBoard
         grid={BOARD_ACTIVE}
-        {...(gameState==="my-turn" ? { legalMoves: BISHOP_DROP_MVS, restrictToLegalMoves: true } : {})}
+        {...(gameState==="my-turn" ? { legalMoves: BISHOP_DROP_MVS, switchableColor: "b" as const } : {})}
         {...(gameState==="won" ? { checkCell: [4, 0] as [number, number] } : {})}
         lastFrom={LAST_FROM}
         lastTo={LAST_TO}
