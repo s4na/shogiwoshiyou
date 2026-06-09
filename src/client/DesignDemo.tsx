@@ -1033,6 +1033,539 @@ function PlayScreenMock({ gameState }: { gameState: "my-turn"|"cpu-thinking"|"wo
   );
 }
 
+// ─── Interactive playground ───────────────────────────
+
+type PlaygroundScreen = "auth" | "mode" | "passcode" | "play";
+type PlaygroundUser = "none" | "guest" | "registered";
+type PlaygroundGameState = "waiting" | "my-turn" | "opponent-turn" | "cpu-thinking" | "won";
+type PlaygroundViewport = "phone" | "tablet" | "desktop";
+type PlaygroundDensity = "compact" | "comfortable";
+type PlaygroundError = "none" | "validation" | "network";
+
+const screenLabels: Record<PlaygroundScreen, string> = {
+  auth: "認証",
+  mode: "モード選択",
+  passcode: "合言葉",
+  play: "対局",
+};
+
+const userLabels: Record<PlaygroundUser, string> = {
+  none: "未ログイン",
+  guest: "ゲスト",
+  registered: "登録ユーザー",
+};
+
+const gameStateLabels: Record<PlaygroundGameState, string> = {
+  waiting: "相手待ち",
+  "my-turn": "自分の手番",
+  "opponent-turn": "相手の手番",
+  "cpu-thinking": "CPU思考中",
+  won: "勝利",
+};
+
+const viewportWidths: Record<PlaygroundViewport, number> = {
+  phone: 390,
+  tablet: 720,
+  desktop: 1040,
+};
+
+function ControlGroup<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: T;
+  options: readonly { value: T; label: string }[];
+  onChange: (next: T) => void;
+}) {
+  const t = useTheme();
+  return (
+    <div style={{ display: "grid", gap: 8 }}>
+      <span style={{ fontFamily: fG, fontSize: 11, fontWeight: 700, color: t.text.tertiary, letterSpacing: "0.06em" }}>{label}</span>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+        {options.map((option) => {
+          const selected = option.value === value;
+          return (
+            <button
+              key={option.value}
+              type="button"
+              aria-pressed={selected}
+              onClick={() => { onChange(option.value); }}
+              style={{
+                minHeight: 32,
+                padding: "6px 10px",
+                borderRadius: R.md,
+                border: `1px solid ${selected ? t.accent.gold : t.border.default}`,
+                backgroundColor: selected ? t.accent.goldDim : t.bg.tertiary,
+                color: selected ? t.accent.gold : t.text.secondary,
+                cursor: "pointer",
+                fontFamily: fG,
+                fontSize: 12,
+                fontWeight: 700,
+                whiteSpace: "nowrap",
+              }}
+            >
+              {option.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function PlaygroundAuthScreen({
+  error,
+  density,
+  onRegister,
+  onGuest,
+}: {
+  error: PlaygroundError;
+  density: PlaygroundDensity;
+  onRegister: () => void;
+  onGuest: () => void;
+}) {
+  const t = useTheme();
+  const compact = density === "compact";
+  return (
+    <div style={{ backgroundColor: t.bg.primary, padding: compact ? 18 : 28, display: "flex", justifyContent: "center" }}>
+      <div style={{ width: "min(400px, 100%)", backgroundColor: t.bg.elevated, borderRadius: R.xl, border: `1px solid ${t.border.default}`, boxShadow: t.shadow.lg, overflow: "hidden" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", borderBottom: `1px solid ${t.border.subtle}` }}>
+          {(["新規登録", "ログイン"] as const).map((label, index) => (
+            <button
+              key={label}
+              type="button"
+              style={{
+                minHeight: 44,
+                border: 0,
+                borderBottom: `2px solid ${index === 0 ? t.accent.gold : "transparent"}`,
+                backgroundColor: "transparent",
+                color: index === 0 ? t.accent.gold : t.text.tertiary,
+                cursor: "pointer",
+                fontFamily: fG,
+                fontSize: 13,
+                fontWeight: 700,
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <div style={{ display: "grid", gap: compact ? 12 : 16, padding: compact ? 18 : 24 }}>
+          {error === "validation" && (
+            <div role="alert" style={{ padding: "10px 12px", borderRadius: R.md, border: `1px solid ${t.accent.vermillion}`, backgroundColor: t.accent.vermillionDim, color: t.accent.vermillion, fontFamily: fG, fontSize: 12, fontWeight: 700 }}>
+              ハンドルは3〜24文字の半角英数字と _ で入力してください。
+            </div>
+          )}
+          <FieldGroup id="pg-handle" label="ハンドル" help="半角英数字と _ のみ。">
+            <Input id="pg-handle" value={error === "validation" ? "??" : "shogi_master"} />
+          </FieldGroup>
+          <FieldGroup id="pg-password" label="パスワード" help="8〜128文字。">
+            <Input id="pg-password" type="password" value="password-demo" />
+          </FieldGroup>
+          <label style={{ display: "flex", alignItems: "flex-start", gap: 10, color: t.text.secondary, fontFamily: fG, fontSize: 12, lineHeight: 1.6 }}>
+            <input type="checkbox" defaultChecked style={{ width: 16, height: 16, marginTop: 2, accentColor: t.accent.gold, flexShrink: 0 }} />
+            <span>利用規約に同意します。</span>
+          </label>
+          <Btn variant="primary" size={compact ? "md" : "lg"} full onClick={onRegister}>登録して始める</Btn>
+          <Btn variant="secondary" size="md" full onClick={onGuest}>ゲストとして入る</Btn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PlaygroundModeScreen({
+  user,
+  density,
+  onCpu,
+  onFriend,
+  onResume,
+}: {
+  user: PlaygroundUser;
+  density: PlaygroundDensity;
+  onCpu: () => void;
+  onFriend: () => void;
+  onResume: () => void;
+}) {
+  const t = useTheme();
+  const compact = density === "compact";
+  const canStart = user !== "none";
+  const myGames = [
+    { id: "1", opponent: "CPU", status: "12手 / 自分の手番" },
+    { id: "2", opponent: "相手待ち", status: "友達対戦 / 合言葉あり" },
+    { id: "3", opponent: "CPU", status: "終局 / 45手" },
+  ];
+  return (
+    <div style={{ backgroundColor: t.bg.primary, display: "flex", justifyContent: "center", padding: compact ? "24px 16px" : "44px 24px 32px" }}>
+      <div style={{ width: "min(520px, 100%)", display: "grid", gap: compact ? 10 : 14 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+          <div>
+            <p style={{ margin: 0, color: t.text.primary, fontFamily: fS, fontSize: 18, fontWeight: 800 }}>{userLabels[user]}状態を確認中</p>
+            <p style={{ margin: "4px 0 0", color: t.text.tertiary, fontFamily: fG, fontSize: 11 }}>実データなしの状態確認用モック</p>
+          </div>
+          <StatusChip color={canStart ? t.semantic.online : t.semantic.offline}>{canStart ? "接続" : "認証前"}</StatusChip>
+        </div>
+        {!canStart && (
+          <div role="alert" style={{ padding: "10px 12px", borderRadius: R.md, border: `1px solid ${t.border.default}`, backgroundColor: t.bg.tertiary, color: t.text.secondary, fontFamily: fG, fontSize: 12, fontWeight: 700 }}>
+            対局開始前に認証画面へ進む想定です。
+          </div>
+        )}
+        <div style={{ display: "grid", gap: 10 }}>
+          <Btn variant="primary" size={compact ? "md" : "lg"} full disabled={!canStart} onClick={onCpu}>CPU対戦を始める</Btn>
+          <Btn variant="secondary" size={compact ? "md" : "lg"} full disabled={!canStart} onClick={onFriend}>友達対戦の合言葉へ</Btn>
+        </div>
+        <div style={{ display: "grid", gap: 6, paddingTop: compact ? 4 : 10 }}>
+          <span style={{ fontFamily: fG, fontSize: 12, fontWeight: 700, color: t.text.secondary }}>対局一覧</span>
+          {myGames.map((game) => (
+            <button
+              key={game.id}
+              type="button"
+              onClick={onResume}
+              disabled={!canStart}
+              style={{
+                display: "grid",
+                gap: 3,
+                minHeight: 48,
+                padding: "10px 12px",
+                borderRadius: R.md,
+                border: `1px solid ${t.border.subtle}`,
+                backgroundColor: t.bg.tertiary,
+                cursor: canStart ? "pointer" : "not-allowed",
+                opacity: canStart ? 1 : 0.55,
+                textAlign: "left",
+              }}
+            >
+              <strong style={{ color: t.text.primary, fontFamily: fG, fontSize: 13 }}>nakata 対 {game.opponent}</strong>
+              <span style={{ color: t.text.tertiary, fontFamily: fG, fontSize: 11 }}>{game.status}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PlaygroundPasscodeScreen({
+  error,
+  density,
+  onBack,
+  onWait,
+  onJoin,
+}: {
+  error: PlaygroundError;
+  density: PlaygroundDensity;
+  onBack: () => void;
+  onWait: () => void;
+  onJoin: () => void;
+}) {
+  const t = useTheme();
+  const compact = density === "compact";
+  return (
+    <div style={{ backgroundColor: t.bg.primary, display: "flex", justifyContent: "center", padding: compact ? "24px 16px" : "44px 24px 32px" }}>
+      <div style={{ width: "min(480px, 100%)", display: "grid", gap: compact ? 10 : 14 }}>
+        <Btn variant="ghost" size="sm" onClick={onBack}>モード選択へ戻る</Btn>
+        <div style={{ display: "grid", gap: compact ? 10 : 14, padding: compact ? 16 : 20, borderRadius: R.lg, border: `1px solid ${error === "validation" ? t.accent.vermillion : t.accent.jade}`, backgroundColor: t.bg.elevated, boxShadow: t.shadow.sm }}>
+          {error === "validation" && (
+            <div role="alert" style={{ padding: "10px 12px", borderRadius: R.md, backgroundColor: t.accent.vermillionDim, color: t.accent.vermillion, fontFamily: fG, fontSize: 12, fontWeight: 700 }}>
+              合言葉は推測されにくい6〜64文字で入力してください。
+            </div>
+          )}
+          <FieldGroup id="pg-passcode" label="合言葉" help="相手だけに共有する文字列を使います。">
+            <Input id="pg-passcode" value={error === "validation" ? "abc123" : "kaku-nari-2026"} />
+          </FieldGroup>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            <Btn variant="primary" size="md" full onClick={onWait}>待ち合わせる</Btn>
+            <Btn variant="secondary" size="md" full onClick={onJoin}>相手が参加</Btn>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PlaygroundPlayScreen({
+  gameState,
+  error,
+  density,
+  onBack,
+  onNextState,
+}: {
+  gameState: PlaygroundGameState;
+  error: PlaygroundError;
+  density: PlaygroundDensity;
+  onBack: () => void;
+  onNextState: (next: PlaygroundGameState) => void;
+}) {
+  const t = useTheme();
+  const compact = density === "compact";
+  const statusMap: Record<PlaygroundGameState, { label: string; color: string; opponent: string }> = {
+    waiting: { label: "相手待ち", color: t.semantic.away, opponent: "相手待ち" },
+    "my-turn": { label: "あなたの手番", color: t.accent.gold, opponent: "CPU" },
+    "opponent-turn": { label: "相手の手番", color: t.semantic.offline, opponent: "s4na" },
+    "cpu-thinking": { label: "CPU思考中", color: t.semantic.away, opponent: "CPU" },
+    won: { label: "nakata の勝ち", color: t.semantic.win, opponent: "CPU" },
+  };
+  const status = statusMap[gameState];
+  const legalMoves = gameState === "my-turn" ? BISHOP_DROP_MVS : undefined;
+  return (
+    <div style={{ backgroundColor: t.bg.primary, padding: compact ? 12 : 18, overflowX: "auto" }}>
+      <div style={{ minWidth: compact ? 0 : 620, display: "grid", gap: 10, justifyItems: "center" }}>
+        <div style={{ width: "100%", display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
+          <Btn variant="ghost" size="sm" onClick={onBack}>モード選択へ</Btn>
+          <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "flex-end", gap: 6 }}>
+            <Btn variant="secondary" size="sm" onClick={() => { onNextState("my-turn"); }}>自分の手番</Btn>
+            <Btn variant="secondary" size="sm" onClick={() => { onNextState("cpu-thinking"); }}>CPU思考</Btn>
+            <Btn variant="secondary" size="sm" onClick={() => { onNextState("won"); }}>終局</Btn>
+          </div>
+        </div>
+        {error === "network" && (
+          <div role="alert" style={{ width: "100%", padding: "10px 12px", borderRadius: R.md, border: `1px solid ${t.accent.vermillion}`, backgroundColor: t.accent.vermillionDim, color: t.accent.vermillion, fontFamily: fG, fontSize: 12, fontWeight: 700 }}>
+            接続が切れました。再接続しながら盤面を保持しています。
+          </div>
+        )}
+        <div style={{ display: "flex", gap: compact ? 8 : 12, alignItems: "start", justifyContent: "center" }}>
+          <div style={{ position: "relative", backgroundColor: t.bg.secondary, borderRadius: R.lg, border: `1px solid ${t.border.subtle}`, padding: compact ? 10 : 12, boxShadow: t.shadow.sm, overflow: "hidden" }}>
+            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, marginBottom: 10, flexWrap: "wrap" }}>
+              <div>
+                <StatusChip color={status.color}>{status.label}</StatusChip>
+                <h2 style={{ fontFamily: fS, fontSize: 13, fontWeight: 700, color: t.text.primary, marginTop: 5 }}>
+                  nakata 対 {status.opponent}
+                </h2>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <StatusChip color={error === "network" ? t.semantic.offline : t.semantic.online}>{error === "network" ? "再接続中" : "接続"}</StatusChip>
+                {gameState === "my-turn" && <Btn variant="danger" size="sm" onClick={() => { onNextState("won"); }}>投了</Btn>}
+              </div>
+            </div>
+            <MockHand side="white" pieces={gameState === "waiting" ? [] : [{ kanji: "歩", count: 2 }]} />
+            <StaticBoard
+              grid={BOARD_ACTIVE}
+              {...(legalMoves ? { legalMoves, switchableColor: "b" as const } : {})}
+              {...(gameState === "won" ? { checkCell: [4, 0] as [number, number] } : {})}
+              lastFrom={LAST_FROM}
+              lastTo={LAST_TO}
+              cellSize={compact ? 26 : 32}
+            />
+            <MockHand
+              side="black"
+              pieces={gameState === "waiting" ? [] : [{ kanji: "歩", count: 4 }, { kanji: "角", count: 1 }]}
+              {...(gameState === "my-turn" ? { selectedKanji: "角" } : {})}
+            />
+            {gameState === "won" && (
+              <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", padding: 14, backgroundColor: t.bg.overlay }}>
+                <div style={{ width: "min(300px, 100%)", display: "grid", gap: 12, padding: 16, borderRadius: R.xl, border: `1px solid ${t.border.default}`, backgroundColor: t.bg.elevated, boxShadow: t.shadow.lg }}>
+                  <p style={{ margin: 0, color: t.text.primary, fontFamily: fS, fontSize: 16, fontWeight: 800 }}>勝ちました</p>
+                  <p style={{ margin: 0, color: t.text.secondary, fontFamily: fG, fontSize: 12, lineHeight: 1.7 }}>終局後のモーダル、CTA、盤面の見え方を確認できます。</p>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                    <Btn variant="secondary" size="sm" full>感想戦</Btn>
+                    <Btn variant="primary" size="sm" full onClick={() => { onNextState("my-turn"); }}>もう一局</Btn>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+          {!compact && <MockHistoryPanel />}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PlaygroundPreview({
+  screen,
+  user,
+  gameState,
+  viewport,
+  density,
+  error,
+  setScreen,
+  setUser,
+  setGameState,
+}: {
+  screen: PlaygroundScreen;
+  user: PlaygroundUser;
+  gameState: PlaygroundGameState;
+  viewport: PlaygroundViewport;
+  density: PlaygroundDensity;
+  error: PlaygroundError;
+  setScreen: (next: PlaygroundScreen) => void;
+  setUser: (next: PlaygroundUser) => void;
+  setGameState: (next: PlaygroundGameState) => void;
+}) {
+  const t = useTheme();
+  const width = viewportWidths[viewport];
+  const currentUser = user === "none" ? userLabels.none : user === "guest" ? "guest_4821" : "nakata";
+  const userStatusColor = user === "none" ? t.semantic.offline : t.semantic.online;
+  return (
+    <div style={{ display: "grid", justifyItems: "center", gap: 10 }}>
+      <div style={{ width: "100%", maxWidth: width, border: `2px solid ${t.border.default}`, borderRadius: R.xl, overflow: "hidden", boxShadow: t.shadow.lg, backgroundColor: t.bg.primary }}>
+        <AppHeaderMock userSlot={screen === "auth" ? undefined : <StatusChip color={userStatusColor}>{currentUser}</StatusChip>} />
+        {screen === "auth" && (
+          <PlaygroundAuthScreen
+            error={error}
+            density={density}
+            onRegister={() => {
+              setUser("registered");
+              setScreen("mode");
+            }}
+            onGuest={() => {
+              setUser("guest");
+              setScreen("mode");
+            }}
+          />
+        )}
+        {screen === "mode" && (
+          <PlaygroundModeScreen
+            user={user}
+            density={density}
+            onCpu={() => {
+              setGameState("my-turn");
+              setScreen("play");
+            }}
+            onFriend={() => { setScreen("passcode"); }}
+            onResume={() => {
+              setGameState("waiting");
+              setScreen("play");
+            }}
+          />
+        )}
+        {screen === "passcode" && (
+          <PlaygroundPasscodeScreen
+            error={error}
+            density={density}
+            onBack={() => { setScreen("mode"); }}
+            onWait={() => {
+              setGameState("waiting");
+              setScreen("play");
+            }}
+            onJoin={() => {
+              setGameState("my-turn");
+              setScreen("play");
+            }}
+          />
+        )}
+        {screen === "play" && (
+          <PlaygroundPlayScreen
+            gameState={gameState}
+            error={error}
+            density={density}
+            onBack={() => { setScreen("mode"); }}
+            onNextState={setGameState}
+          />
+        )}
+      </div>
+      <span style={{ color: t.text.tertiary, fontFamily: fG, fontSize: 11 }}>
+        {String(width)}px preview / {screenLabels[screen]} / {gameStateLabels[gameState]}
+      </span>
+    </div>
+  );
+}
+
+function DesignPlayground() {
+  const t = useTheme();
+  const [screen, setScreen] = useState<PlaygroundScreen>("auth");
+  const [user, setUser] = useState<PlaygroundUser>("none");
+  const [gameState, setGameState] = useState<PlaygroundGameState>("waiting");
+  const [viewport, setViewport] = useState<PlaygroundViewport>("desktop");
+  const [density, setDensity] = useState<PlaygroundDensity>("comfortable");
+  const [error, setError] = useState<PlaygroundError>("none");
+
+  return (
+    <SubSection title="状態を切り替えられるプロトタイプ">
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 20, alignItems: "flex-start" }}>
+        <div style={{ flex: "1 1 280px", maxWidth: 340, display: "grid", gap: 18, padding: 16, borderRadius: R.lg, border: `1px solid ${t.border.default}`, backgroundColor: t.bg.secondary, boxShadow: t.shadow.sm, position: "sticky", top: 64 }}>
+          <div style={{ display: "grid", gap: 6 }}>
+            <p style={{ margin: 0, color: t.text.primary, fontFamily: fS, fontSize: 17, fontWeight: 800 }}>プレイグラウンド</p>
+            <p style={{ margin: 0, color: t.text.secondary, fontFamily: fG, fontSize: 12, lineHeight: 1.7 }}>
+              APIなしで主要画面の状態、幅、エラー表示を確認できます。
+            </p>
+          </div>
+          <ControlGroup
+            label="画面"
+            value={screen}
+            options={(Object.entries(screenLabels).map(([value, label]) => ({ value, label })) as { value: PlaygroundScreen; label: string }[])}
+            onChange={setScreen}
+          />
+          <ControlGroup
+            label="ログイン状態"
+            value={user}
+            options={(Object.entries(userLabels).map(([value, label]) => ({ value, label })) as { value: PlaygroundUser; label: string }[])}
+            onChange={setUser}
+          />
+          <ControlGroup
+            label="対局状態"
+            value={gameState}
+            options={(Object.entries(gameStateLabels).map(([value, label]) => ({ value, label })) as { value: PlaygroundGameState; label: string }[])}
+            onChange={(next) => {
+              setGameState(next);
+              setScreen("play");
+            }}
+          />
+          <ControlGroup
+            label="幅"
+            value={viewport}
+            options={[
+              { value: "phone", label: "mobile" },
+              { value: "tablet", label: "tablet" },
+              { value: "desktop", label: "desktop" },
+            ]}
+            onChange={setViewport}
+          />
+          <ControlGroup
+            label="密度"
+            value={density}
+            options={[
+              { value: "comfortable", label: "標準" },
+              { value: "compact", label: "詰める" },
+            ]}
+            onChange={setDensity}
+          />
+          <ControlGroup
+            label="エラー"
+            value={error}
+            options={[
+              { value: "none", label: "なし" },
+              { value: "validation", label: "入力エラー" },
+              { value: "network", label: "通信断" },
+            ]}
+            onChange={setError}
+          />
+          <Btn
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setScreen("auth");
+              setUser("none");
+              setGameState("waiting");
+              setViewport("desktop");
+              setDensity("comfortable");
+              setError("none");
+            }}
+          >
+            初期状態へ戻す
+          </Btn>
+        </div>
+        <div style={{ flex: "999 1 420px", minWidth: 0, padding: 12, borderRadius: R.lg, border: `1px solid ${t.border.subtle}`, backgroundColor: t.bg.tertiary, overflowX: "auto" }}>
+          <PlaygroundPreview
+            screen={screen}
+            user={user}
+            gameState={gameState}
+            viewport={viewport}
+            density={density}
+            error={error}
+            setScreen={setScreen}
+            setUser={setUser}
+            setGameState={setGameState}
+          />
+        </div>
+      </div>
+    </SubSection>
+  );
+}
+
 // ─── Screen flows section ─────────────────────────────
 
 function ScreenFlows() {
@@ -1159,6 +1692,10 @@ function Showcase({ theme }: { theme: Theme }) {
         </Section>
 
         {/* ─── Screen flows ─── */}
+        <Section title="プロトタイプ — 操作できる画面モック">
+          <DesignPlayground />
+        </Section>
+
         <Section title="画面フロー — ユーザー体験の全体像">
           <ScreenFlows />
         </Section>
