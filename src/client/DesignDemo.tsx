@@ -912,6 +912,9 @@ function MockBoardPanel({ gameState }: { gameState: "my-turn"|"cpu-thinking"|"wo
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <StatusChip color={isPlaying ? t.semantic.online : t.text.tertiary}>{isPlaying ? "接続" : "待機"}</StatusChip>
+          {gameState==="won" && <Btn variant="secondary" size="sm">感想戦</Btn>}
+          {gameState==="won" && <Btn variant="primary" size="sm">もう一局</Btn>}
+          {gameState==="won" && <Btn variant="secondary" size="sm">棋譜DL</Btn>}
           {gameState==="my-turn" && <Btn variant="danger" size="sm">投了</Btn>}
         </div>
       </div>

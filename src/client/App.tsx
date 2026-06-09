@@ -16,6 +16,7 @@ import {
   logoutAccount,
   playMove,
   registerAccount,
+  requestFriendRematch,
   resignGame,
   updateAnalysis,
   updateProfile,
@@ -81,6 +82,13 @@ const analysisMode = signal(false);
 const analysisSnapshot = signal<AnalysisSnapshot | null>(null);
 const analysisSelectedSquare = signal<string | null>(null);
 const analysisSelectedHand = signal<{ color: PlayerColor; type: HandPieceType } | null>(null);
+const friendPasscodes = signal<Record<string, string>>({});
+const friendRematch = signal<{
+  gameId: string;
+  status: "waiting";
+  acceptedCount: number;
+  requiredCount: number;
+} | null>(null);
 const notice = signal<string | null>(null);
 const busy = signal(false);
 const connection = signal<"idle" | "connecting" | "live" | "reconnecting" | "polling">("idle");
@@ -93,6 +101,7 @@ const signedIn = computed(() => user.value !== null && user.value !== undefined)
 let socket: WebSocket | null = null;
 let reconnectTimer: number | null = null;
 let pollingTimer: number | null = null;
+let rematchPollingTimer: number | null = null;
 let reconnectAttempts = 0;
 
 // ─── Helpers ──────────────────────────────────────────
@@ -117,6 +126,7 @@ export function App() {
     window.addEventListener("popstate", onPopState);
     return () => {
       window.removeEventListener("popstate", onPopState);
+      stopRematchPolling();
       closeRealtime();
     };
   }, []);
@@ -967,6 +977,8 @@ function BoardPanel() {
     analysisMode.value && analysisSnapshot.value
       ? { ...game, board: analysisSnapshot.value.board, hands: analysisSnapshot.value.hands }
       : game;
+  const rematchPasscode = friendPasscodes.value[game.id];
+  const rematchState = friendRematch.value?.gameId === game.id ? friendRematch.value : null;
 
   return (
     <div
@@ -1014,6 +1026,18 @@ function BoardPanel() {
               disabled={busy.value}
             >
               {analysisMode.value ? "実戦譜" : "感想戦"}
+            </Btn>
+          )}
+          {game.status === "ended" && game.mode === "friend" && color && rematchPasscode && (
+            <Btn
+              variant={rematchState ? "secondary" : "primary"}
+              size="sm"
+              onClick={() => void handleFriendRematch(game.id)}
+              disabled={busy.value}
+            >
+              {rematchState
+                ? `相手待ち ${String(rematchState.acceptedCount)}/${String(rematchState.requiredCount)}`
+                : "もう一局"}
             </Btn>
           )}
           <Btn variant="secondary" size="sm" onClick={() => void handleDownloadKif(game.id)} disabled={busy.value}>
@@ -1541,7 +1565,10 @@ async function handleLogout(): Promise<void> {
     events.value = [];
     analysisMode.value = false;
     analysisSnapshot.value = null;
+    friendPasscodes.value = {};
+    friendRematch.value = null;
     appStage.value = "mode-select";
+    stopRematchPolling();
     closeRealtime();
   });
 }
@@ -1565,6 +1592,9 @@ async function refreshGames(): Promise<void> {
 async function submitCreateGame(mode: GameMode, passcode?: string): Promise<void> {
   await withBusy(async () => {
     const response = await createGame({ mode, ...(mode === "friend" && passcode ? { passcode } : {}) });
+    if (mode === "friend" && passcode) {
+      rememberFriendPasscode(response.game.id, passcode);
+    }
     applyGameSnapshot(response.game);
     appStage.value = "playing";
     connectRealtime(response.game.id);
@@ -1583,6 +1613,8 @@ async function selectGame(gameId: string): Promise<void> {
     analysisSnapshot.value = null;
     analysisSelectedSquare.value = null;
     analysisSelectedHand.value = null;
+    stopRematchPolling();
+    friendRematch.value = null;
     appStage.value = "playing";
     connectRealtime(gameId);
     await refreshEvents();
@@ -1600,6 +1632,8 @@ function returnToModeSelect(): void {
   analysisSnapshot.value = null;
   analysisSelectedSquare.value = null;
   analysisSelectedHand.value = null;
+  stopRematchPolling();
+  friendRematch.value = null;
   closeRealtime();
 }
 
@@ -1677,6 +1711,43 @@ async function handleResign(gameId: string): Promise<void> {
     await refreshGames();
     await refreshEvents();
   });
+}
+
+async function handleFriendRematch(gameId: string): Promise<void> {
+  const passcode = friendPasscodes.value[gameId];
+  if (!passcode || busy.value) return;
+  await withBusy(async () => {
+    await acceptFriendRematch(gameId, passcode);
+  });
+}
+
+async function acceptFriendRematch(gameId: string, passcode: string): Promise<void> {
+  const response = await requestFriendRematch(gameId, passcode);
+  rememberFriendPasscode(response.game.id, passcode);
+  if (response.rematch.status === "started") {
+    stopRematchPolling();
+    friendRematch.value = null;
+    applyGameSnapshot(response.game);
+    selectedSquare.value = null;
+    selectedHand.value = null;
+    promotionChoice.value = null;
+    analysisMode.value = false;
+    analysisSnapshot.value = null;
+    appStage.value = "playing";
+    connectRealtime(response.game.id);
+    await refreshGames();
+    await refreshEvents();
+    return;
+  }
+  applyGameSnapshot(response.game);
+  friendRematch.value = {
+    gameId,
+    status: "waiting",
+    acceptedCount: response.rematch.acceptedCount,
+    requiredCount: response.rematch.requiredCount,
+  };
+  startRematchPolling(gameId, passcode);
+  await refreshGames();
 }
 
 async function toggleAnalysisMode(gameId: string): Promise<void> {
@@ -1837,6 +1908,24 @@ function startPolling(gameId: string): void {
   }, 5000);
 }
 
+function startRematchPolling(gameId: string, passcode: string): void {
+  if (rematchPollingTimer !== null) return;
+  rematchPollingTimer = window.setInterval(() => {
+    if (friendRematch.value?.gameId !== gameId) {
+      stopRematchPolling();
+      return;
+    }
+    void acceptFriendRematch(gameId, passcode).catch(showError);
+  }, 2500);
+}
+
+function stopRematchPolling(): void {
+  if (rematchPollingTimer !== null) {
+    window.clearInterval(rematchPollingTimer);
+    rematchPollingTimer = null;
+  }
+}
+
 function stopPolling(): void {
   if (pollingTimer !== null) { window.clearInterval(pollingTimer); pollingTimer = null; }
 }
@@ -1851,6 +1940,10 @@ function closeRealtime(): void {
 
 function applyGameSnapshot(game: GameSnapshot): void {
   activeGame.value = game;
+  if (friendRematch.value && friendRematch.value.gameId !== game.id) {
+    stopRematchPolling();
+    friendRematch.value = null;
+  }
   if (game.status !== "ended") {
     analysisMode.value = false;
     analysisSnapshot.value = null;
@@ -1874,6 +1967,10 @@ function applyGameSnapshot(game: GameSnapshot): void {
   if (game.currentTurn !== color) {
     promotionChoice.value = null;
   }
+}
+
+function rememberFriendPasscode(gameId: string, passcode: string): void {
+  friendPasscodes.value = { ...friendPasscodes.value, [gameId]: passcode };
 }
 
 function cloneHands(hands: Record<PlayerColor, HandPiece[]>): Record<PlayerColor, HandPiece[]> {
