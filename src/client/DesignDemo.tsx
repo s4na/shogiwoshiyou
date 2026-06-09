@@ -452,7 +452,9 @@ const BOARD_ACTIVE: BoardGrid = [
 
 const LAST_FROM: [number, number] = [6, 2];
 const LAST_TO:   [number, number] = [6, 3];
-const LEGAL_MVS: [number, number][] = [[4, 4], [0, 4]];
+const BISHOP_DROP_MVS: [number, number][] = BOARD_ACTIVE.flatMap((row, ri) =>
+  row.flatMap((piece, ci) => (piece ? [] : [[ci, ri] as [number, number]])),
+);
 
 // ─── Interactive board demo ───────────────────────────
 
@@ -928,7 +930,7 @@ function MockBoardPanel({ gameState }: { gameState: "my-turn"|"cpu-thinking"|"wo
       } />
       <StaticBoard
         grid={BOARD_ACTIVE}
-        {...(gameState==="my-turn" ? { legalMoves: LEGAL_MVS, restrictToLegalMoves: true } : {})}
+        {...(gameState==="my-turn" ? { legalMoves: BISHOP_DROP_MVS, restrictToLegalMoves: true } : {})}
         {...(gameState==="won" ? { checkCell: [4, 0] as [number, number] } : {})}
         lastFrom={LAST_FROM}
         lastTo={LAST_TO}
