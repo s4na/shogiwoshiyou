@@ -452,7 +452,6 @@ const BOARD_ACTIVE: BoardGrid = [
 
 const LAST_FROM: [number, number] = [6, 2];
 const LAST_TO:   [number, number] = [6, 3];
-const SEL_CELL:  [number, number] = [2, 6]; // 7七の歩を選択中
 const LEGAL_MVS: [number, number][] = [[2, 5], [2, 4]];
 
 // ─── Interactive board demo ───────────────────────────
@@ -706,7 +705,7 @@ function cellEq(cell: [number, number] | undefined, c: number, r: number): boole
 }
 
 function StaticBoard({
-  grid, selected, lastFrom, lastTo, legalMoves, checkCell, cellSize = 36, onCellClick,
+  grid, selected, lastFrom, lastTo, legalMoves, checkCell, cellSize = 36, restrictToLegalMoves, onCellClick,
 }: {
   grid: BoardGrid;
   selected?: [number, number];
@@ -715,6 +714,7 @@ function StaticBoard({
   legalMoves?: [number, number][];
   checkCell?: [number, number];
   cellSize?: number;
+  restrictToLegalMoves?: boolean;
   onCellClick?: (ci: number, ri: number) => void;
 }) {
   const t = useTheme();
@@ -736,9 +736,10 @@ function StaticBoard({
             const isLast  = cellEq(lastFrom,  ci, ri) || cellEq(lastTo, ci, ri);
             const isLegal = legalMoves?.some(([lc,lr]) => lc===ci && lr===ri) ?? false;
             const isCheck = cellEq(checkCell, ci, ri);
+            const disabledTarget = Boolean(restrictToLegalMoves && !isLegal);
             const bg = isSel ? t.semantic.selected : isCheck ? t.semantic.check : isLast ? t.semantic.lastMove : isLegal ? t.semantic.legalMove : "transparent";
             return (
-              <div key={`${String(ci)}-${String(ri)}`} onClick={onCellClick ? () => { onCellClick(ci, ri); } : undefined} style={{ width: cellSize, height: cellSize, display: "flex", alignItems: "center", justifyContent: "center", border: `0.5px solid ${t.board.grid}`, backgroundColor: bg, position: "relative", cursor: onCellClick ? "pointer" : "default" }}>
+              <div key={`${String(ci)}-${String(ri)}`} onClick={onCellClick && !disabledTarget ? () => { onCellClick(ci, ri); } : undefined} style={{ width: cellSize, height: cellSize, display: "flex", alignItems: "center", justifyContent: "center", border: `0.5px solid ${t.board.grid}`, backgroundColor: bg, position: "relative", cursor: disabledTarget ? "not-allowed" : onCellClick ? "pointer" : "default", opacity: disabledTarget ? 0.5 : 1 }}>
                 {isStar && <div style={{ position: "absolute", top: -2, left: -2, width: 4, height: 4, borderRadius: R.full, backgroundColor: t.board.star }} />}
                 {piece && <ShogiPiece kanji={piece.kanji} size={ps} {...(piece.promoted ? { promoted: true } : {})} flipped={piece.color==="w"} selected={isSel} />}
               </div>
@@ -924,7 +925,7 @@ function MockBoardPanel({ gameState }: { gameState: "my-turn"|"cpu-thinking"|"wo
       } />
       <StaticBoard
         grid={BOARD_ACTIVE}
-        {...(gameState==="my-turn" ? { selected: SEL_CELL, legalMoves: LEGAL_MVS } : {})}
+        {...(gameState==="my-turn" ? { legalMoves: LEGAL_MVS, restrictToLegalMoves: true } : {})}
         {...(gameState==="won" ? { checkCell: [4, 0] as [number, number] } : {})}
         lastFrom={LAST_FROM}
         lastTo={LAST_TO}
