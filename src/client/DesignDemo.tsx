@@ -944,18 +944,18 @@ const MOCK_MOVES = [
 function MockHistoryPanel() {
   const t = useTheme();
   return (
-    <div style={{ backgroundColor: t.bg.secondary, borderRadius: R.lg, border: `1px solid ${t.border.subtle}`, overflow: "hidden" }}>
-      <div style={{ padding: "8px 12px", borderBottom: `1px solid ${t.border.subtle}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <span style={{ fontFamily: fG, fontSize: 11, fontWeight: 600, color: t.text.tertiary, letterSpacing: "0.04em" }}>棋譜</span>
-        <span style={{ fontFamily: fG, fontSize: 10, color: t.text.tertiary, fontVariantNumeric: "tabular-nums" }}>{MOCK_MOVES.length}手</span>
+    <div style={{ overflow: "hidden", opacity: 0.7 }}>
+      <div style={{ padding: "4px 8px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <span style={{ fontFamily: fG, fontSize: 10, fontWeight: 600, color: t.text.tertiary, letterSpacing: "0.04em" }}>棋譜</span>
+        <span style={{ fontFamily: fG, fontSize: 9, color: t.text.tertiary, fontVariantNumeric: "tabular-nums" }}>{MOCK_MOVES.length}手</span>
       </div>
-      <div style={{ padding: "8px 12px" }}>
+      <div style={{ padding: "4px 8px" }}>
         <ol style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 1, maxHeight: 280, overflowY: "auto" }}>
           {MOCK_MOVES.map((m) => (
             <li key={m.ply} style={{ display: "flex", alignItems: "center", gap: 6, padding: "2px 4px", borderRadius: R.sm, backgroundColor: m.ply===MOCK_MOVES.length ? t.accent.goldDim : "transparent" }}>
-              <span style={{ fontFamily: fG, fontSize: 9, color: t.text.tertiary, fontVariantNumeric: "tabular-nums", flexShrink: 0, minWidth: 20 }}>{m.ply}</span>
-              <span title={m.usi} style={{ fontFamily: fS, fontSize: 13, color: t.text.secondary, letterSpacing: "0.02em" }}>
-                <span style={{ color: m.ply % 2 === 1 ? t.text.primary : t.text.tertiary }}>{m.ply % 2 === 1 ? "▲" : "△"}</span>
+              <span style={{ fontFamily: fG, fontSize: 8, color: t.text.tertiary, fontVariantNumeric: "tabular-nums", flexShrink: 0, minWidth: 16 }}>{m.ply}</span>
+              <span title={m.usi} style={{ fontFamily: fS, fontSize: 11, color: t.text.tertiary, letterSpacing: "0.02em" }}>
+                <span style={{ color: m.ply % 2 === 1 ? t.text.secondary : t.text.tertiary }}>{m.ply % 2 === 1 ? "▲" : "△"}</span>
                 {m.notation}
               </span>
             </li>
@@ -970,7 +970,7 @@ function MockHistoryPanel() {
 
 function PlayScreenMock({ gameState }: { gameState: "my-turn"|"cpu-thinking"|"won"|"waiting" }) {
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "180px 290px 140px", gap: 12, alignItems: "start", minWidth: 634 }}>
+    <div style={{ display: "grid", gridTemplateColumns: "auto 290px 140px", gap: 12, alignItems: "start", minWidth: 500 }}>
       <MockGameListPanel />
       <MockBoardPanel gameState={gameState} />
       <MockHistoryPanel />
@@ -1033,14 +1033,14 @@ function ScreenFlows() {
         <MockModeSelectPasscodeOpen />
       </ScreenFrame>
 
-      <ScreenFrame label="③ 戦闘モード — 友達対戦（相手待ち）">
+      <ScreenFrame label="③ 対局モード — 友達対戦（相手待ち）">
         <AppHeaderMock userSlot={<OnlineChip />} />
         <div style={{ backgroundColor: t.bg.primary, padding: 16, overflowX: "auto" }}>
           <PlayScreenMock gameState="waiting" />
         </div>
       </ScreenFrame>
 
-      <ScreenFrame label="④ 戦闘モード — あなたの手番（7七歩を選択、合法手を緑ハイライト）">
+      <ScreenFrame label="④ 対局モード — あなたの手番（7七歩を選択、合法手を緑ハイライト）">
         <AppHeaderMock userSlot={<OnlineChip />} />
         <div style={{ backgroundColor: t.bg.primary, padding: 16, overflowX: "auto" }}>
           <PlayScreenMock gameState="my-turn" />

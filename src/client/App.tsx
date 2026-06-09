@@ -85,7 +85,7 @@ const notice = signal<string | null>(null);
 const busy = signal(false);
 const connection = signal<"idle" | "connecting" | "live" | "reconnecting" | "polling">("idle");
 const authMode = signal<"register" | "login">("register");
-const appStage = signal<"mode-select" | "battle">("mode-select");
+const appStage = signal<"mode-select" | "playing">("mode-select");
 const currentPage = signal<"home" | "terms">(pageForPath(window.location.pathname));
 
 const signedIn = computed(() => user.value !== null && user.value !== undefined);
@@ -146,8 +146,8 @@ export function App() {
         ::-webkit-scrollbar-track { background: ${theme.bg.secondary}; }
         ::-webkit-scrollbar-thumb { background: ${theme.border.default}; border-radius: 3px; }
         input::placeholder { color: ${theme.text.tertiary}; }
-        .play-layout { display: grid; grid-template-columns: minmax(220px,280px) minmax(0,1fr) minmax(200px,260px); gap: 16px; }
-        @media (max-width: 1020px) {
+        .play-layout { display: grid; grid-template-columns: auto 1fr 180px; gap: 16px; }
+        @media (max-width: 860px) {
           .play-layout { grid-template-columns: 1fr !important; }
           .side-order-1 { order: 2; }
           .board-order { order: 1; }
@@ -1345,32 +1345,29 @@ function HistoryPanel() {
   return (
     <div
       style={{
-        backgroundColor: t.bg.secondary,
-        borderRadius: R.lg,
-        border: `1px solid ${t.border.subtle}`,
         overflow: "hidden",
+        opacity: 0.7,
       }}
     >
       <div
         style={{
-          padding: "8px 12px",
-          borderBottom: `1px solid ${t.border.subtle}`,
+          padding: "4px 8px",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
         }}
       >
-        <span style={{ fontFamily: fG, fontSize: 11, fontWeight: 600, color: t.text.tertiary, letterSpacing: "0.04em" }}>
+        <span style={{ fontFamily: fG, fontSize: 10, fontWeight: 600, color: t.text.tertiary, letterSpacing: "0.04em" }}>
           棋譜
         </span>
         {game && (
-          <span style={{ fontFamily: fG, fontSize: 10, color: t.text.tertiary, fontVariantNumeric: "tabular-nums" }}>
+          <span style={{ fontFamily: fG, fontSize: 9, color: t.text.tertiary, fontVariantNumeric: "tabular-nums" }}>
             {game.moves.length}手
           </span>
         )}
       </div>
 
-      <div style={{ padding: "8px 12px" }}>
+      <div style={{ padding: "4px 8px" }}>
         {!game && (
           <p style={{ fontFamily: fG, fontSize: 12, color: t.text.tertiary, textAlign: "center", padding: "8px 0" }}>
             対局未選択
@@ -1396,11 +1393,11 @@ function HistoryPanel() {
                 <span
                   style={{
                     fontFamily: fG,
-                    fontSize: 9,
+                    fontSize: 8,
                     color: t.text.tertiary,
                     fontVariantNumeric: "tabular-nums",
                     flexShrink: 0,
-                    minWidth: 20,
+                    minWidth: 16,
                   }}
                 >
                   {move.ply}
@@ -1409,12 +1406,12 @@ function HistoryPanel() {
                   title={moveUsiTitle(move)}
                   style={{
                     fontFamily: fS,
-                    fontSize: 13,
-                    color: t.text.secondary,
+                    fontSize: 11,
+                    color: t.text.tertiary,
                     letterSpacing: "0.02em",
                   }}
                 >
-                  <span style={{ color: move.ply % 2 === 1 ? t.text.primary : t.text.tertiary }}>
+                  <span style={{ color: move.ply % 2 === 1 ? t.text.secondary : t.text.tertiary }}>
                     {move.ply % 2 === 1 ? "▲" : "△"}
                   </span>
                   {moveNotationLabel(move)}
@@ -1570,7 +1567,7 @@ async function submitCreateGame(mode: GameMode, passcode?: string): Promise<void
   await withBusy(async () => {
     const response = await createGame({ mode, ...(mode === "friend" && passcode ? { passcode } : {}) });
     applyGameSnapshot(response.game);
-    appStage.value = "battle";
+    appStage.value = "playing";
     connectRealtime(response.game.id);
     await refreshGames();
   });
@@ -1587,7 +1584,7 @@ async function selectGame(gameId: string): Promise<void> {
     analysisSnapshot.value = null;
     analysisSelectedSquare.value = null;
     analysisSelectedHand.value = null;
-    appStage.value = "battle";
+    appStage.value = "playing";
     connectRealtime(gameId);
     await refreshEvents();
   });
