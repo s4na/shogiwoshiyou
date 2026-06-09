@@ -85,7 +85,6 @@ const notice = signal<string | null>(null);
 const busy = signal(false);
 const connection = signal<"idle" | "connecting" | "live" | "reconnecting" | "polling">("idle");
 const authMode = signal<"register" | "login">("register");
-const gameMode = signal<GameMode>("cpu");
 const appStage = signal<"mode-select" | "battle">("mode-select");
 const currentPage = signal<"home" | "terms">(pageForPath(window.location.pathname));
 
@@ -756,7 +755,7 @@ function ModeSelectScreen() {
         gap: 12,
       }}
     >
-      <div aria-label="対戦モード" style={{ display: "grid", gap: 10 }}>
+      <section aria-label="対戦モード" style={{ display: "grid", gap: 10 }}>
         <Btn
           variant="primary"
           size="lg"
@@ -771,6 +770,7 @@ function ModeSelectScreen() {
             variant="secondary"
             size="lg"
             full
+            disabled={busy.value}
             onClick={() => { setPasscodeOpen(true); }}
           >
             友達対戦
@@ -825,7 +825,7 @@ function ModeSelectScreen() {
             </div>
           </form>
         )}
-      </div>
+      </section>
       <ModeSelectGameList />
     </main>
   );
@@ -838,7 +838,7 @@ function ModeSelectGameList() {
     <div style={{ paddingTop: 8 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
         <span style={{ fontFamily: fG, fontSize: 13, fontWeight: 600, color: t.text.secondary }}>
-          過去の対局
+          対局一覧
         </span>
         <Btn variant="ghost" size="sm" onClick={() => void refreshGames()} disabled={busy.value}>
           更新
@@ -1568,7 +1568,6 @@ async function refreshGames(): Promise<void> {
 
 async function submitCreateGame(mode: GameMode, passcode?: string): Promise<void> {
   await withBusy(async () => {
-    gameMode.value = mode;
     const response = await createGame({ mode, ...(mode === "friend" && passcode ? { passcode } : {}) });
     applyGameSnapshot(response.game);
     appStage.value = "battle";

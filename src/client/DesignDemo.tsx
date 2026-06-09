@@ -837,7 +837,7 @@ function MockModeSelectScreen() {
         </div>
         <div style={{ paddingTop: 8 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-            <span style={{ fontFamily: fG, fontSize: 13, fontWeight: 600, color: t.text.secondary }}>過去の対局</span>
+            <span style={{ fontFamily: fG, fontSize: 13, fontWeight: 600, color: t.text.secondary }}>対局一覧</span>
             <Btn variant="ghost" size="sm">更新</Btn>
           </div>
           <div style={{ display: "grid", gap: 6 }}>
@@ -853,6 +853,37 @@ function MockModeSelectScreen() {
                 </span>
               </div>
             ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MockModeSelectPasscodeOpen() {
+  const t = useTheme();
+  return (
+    <div style={{ backgroundColor: t.bg.primary, display: "flex", justifyContent: "center", padding: "48px 24px 34px" }}>
+      <div style={{ width: "min(480px, 100%)", display: "grid", gap: 12 }}>
+        <div style={{ display: "grid", gap: 10 }}>
+          <Btn variant="primary" size="lg" full>CPU対戦</Btn>
+          <div
+            style={{
+              display: "grid",
+              gap: 10,
+              padding: 16,
+              borderRadius: R.lg,
+              border: `1px solid ${t.accent.jade}`,
+              backgroundColor: t.bg.elevated,
+            }}
+          >
+            <FieldGroup id="demo-passcode" label="合言葉" helpId="demo-passcode-help" help="12〜64文字。推測されにくい合言葉を相手だけに共有します。">
+              <Input id="demo-passcode" placeholder="" />
+            </FieldGroup>
+            <div style={{ display: "flex", gap: 8 }}>
+              <Btn variant="primary" size="md" full>待ち合わせる</Btn>
+              <Btn variant="ghost" size="md">戻る</Btn>
+            </div>
           </div>
         </div>
       </div>
@@ -995,6 +1026,11 @@ function ScreenFlows() {
       <ScreenFrame label="② モード選択 — 新規開始または対局再開">
         <AppHeaderMock userSlot={<OnlineChip />} />
         <MockModeSelectScreen />
+      </ScreenFrame>
+
+      <ScreenFrame label="②-b モード選択 — 友達対戦パスコード入力">
+        <AppHeaderMock userSlot={<OnlineChip />} />
+        <MockModeSelectPasscodeOpen />
       </ScreenFrame>
 
       <ScreenFrame label="③ 戦闘モード — 友達対戦（相手待ち）">
