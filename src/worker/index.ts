@@ -62,11 +62,35 @@ const profileSchema = z.object({
   displayName: displayNameSchema,
 });
 
-const weakPasscodeSchema = /^(?:012345|123456|234567|345678|456789|567890|654321|abcdef|abc123|password|qwerty)$/i;
+const weakPasscodeWords = new Set(["password", "qwerty", "abc123"]);
+const weakPasscodeSequences = [
+  "0123456789",
+  "9876543210",
+  "abcdefghijklmnopqrstuvwxyz",
+  "zyxwvutsrqponmlkjihgfedcba",
+  "qwertyuiop",
+  "poiuytrewq",
+  "asdfghjkl",
+  "lkjhgfdsa",
+  "zxcvbnm",
+  "mnbvcxz",
+];
+
+function isWeakPasscode(value: string): boolean {
+  const normalized = value.toLowerCase();
+  if (
+    /^(.)\1+$/.test(normalized) ||
+    /^\d{6,8}$/.test(normalized) ||
+    weakPasscodeWords.has(normalized)
+  ) {
+    return true;
+  }
+  return weakPasscodeSequences.some((sequence) => sequence.includes(normalized));
+}
 
 const createGameSchema = z.object({
   mode: z.enum(["cpu", "friend"]).default("cpu"),
-  passcode: z.string().trim().min(6).max(64).refine((value) => !weakPasscodeSchema.test(value), {
+  passcode: z.string().trim().min(6).max(64).refine((value) => !isWeakPasscode(value), {
     message: "推測されやすい合言葉は使えません。",
   }).optional(),
 });

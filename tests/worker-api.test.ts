@@ -357,23 +357,25 @@ describe("GameRoom moves", () => {
     expect(tooShort.status).toBe(400);
     expect(tooShortBody.error?.code).toBe("validation_error");
 
-    const weak = await app.request(
-      `${origin}/api/games`,
-      {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          cookie: black.cookie,
-          origin,
+    for (const weakPasscode of ["abc123", "123456", "111111", "837261"]) {
+      const weak = await app.request(
+        `${origin}/api/games`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            cookie: black.cookie,
+            origin,
+          },
+          body: JSON.stringify({ mode: "friend", passcode: weakPasscode }),
         },
-        body: JSON.stringify({ mode: "friend", passcode: "abc123" }),
-      },
-      env,
-    );
-    const weakBody: { error?: { code?: string } } = await weak.json();
+        env,
+      );
+      const weakBody: { error?: { code?: string } } = await weak.json();
 
-    expect(weak.status).toBe(400);
-    expect(weakBody.error?.code).toBe("validation_error");
+      expect(weak.status).toBe(400);
+      expect(weakBody.error?.code).toBe("validation_error");
+    }
 
     const first = await app.request(
       `${origin}/api/games`,
