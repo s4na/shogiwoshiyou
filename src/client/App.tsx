@@ -9,6 +9,7 @@ import {
   getAnalysis,
   getGame,
   getGameEvents,
+  getFriendRematchStatus,
   getSession,
   listGames,
   loginAccount,
@@ -89,6 +90,12 @@ const friendRematch = signal<{
   acceptedCount: number;
   requiredCount: number;
 } | null>(null);
+const friendRematchInvite = signal<{
+  gameId: string;
+  acceptedCount: number;
+  requiredCount: number;
+} | null>(null);
+const dismissedRematchInvites = signal<Record<string, number>>({});
 const notice = signal<string | null>(null);
 const busy = signal(false);
 const connection = signal<"idle" | "connecting" | "live" | "reconnecting" | "polling">("idle");
@@ -102,6 +109,7 @@ let socket: WebSocket | null = null;
 let reconnectTimer: number | null = null;
 let pollingTimer: number | null = null;
 let rematchPollingTimer: number | null = null;
+let rematchInvitePollingTimer: number | null = null;
 let reconnectAttempts = 0;
 
 // ─── Helpers ──────────────────────────────────────────
@@ -798,12 +806,12 @@ function ModeSelectScreen() {
               backgroundColor: t.bg.elevated,
             }}
           >
-            <FieldGroup id="friend-passcode" label="合言葉" helpId="friend-passcode-help" help="12〜64文字。推測されにくい合言葉を相手だけに共有します。">
+            <FieldGroup id="friend-passcode" label="合言葉" helpId="friend-passcode-help" help="6〜64文字。推測されにくい合言葉を相手だけに共有します。">
               <Input
                 id="friend-passcode"
                 name="passcode"
                 required
-                minLength={12}
+                minLength={6}
                 maxLength={64}
                 autoComplete="off"
                 aria-describedby="friend-passcode-help"
@@ -979,6 +987,7 @@ function BoardPanel() {
       : game;
   const rematchPasscode = friendPasscodes.value[game.id];
   const rematchState = friendRematch.value?.gameId === game.id ? friendRematch.value : null;
+  const rematchInviteState = friendRematchInvite.value?.gameId === game.id ? friendRematchInvite.value : null;
 
   return (
     <div
@@ -1102,6 +1111,39 @@ function BoardPanel() {
             </button>
           </div>
         )}
+      </Modal>
+      <Modal
+        open={Boolean(rematchInviteState && rematchPasscode)}
+        onClose={() => { dismissFriendRematchInvite(game.id, rematchInviteState?.acceptedCount ?? 0); }}
+        title="もう一局誘われています"
+      >
+        {rematchInviteState && rematchPasscode ? (
+          <div style={{ display: "grid", gap: 14 }}>
+            <p style={{ color: t.text.secondary, fontFamily: fG, fontSize: 14, lineHeight: 1.7 }}>
+              相手がもう一局を希望しています。受けると同じ合言葉で新しい対局を開始します。
+            </p>
+            <div style={{ display: "flex", gap: 8 }}>
+              <Btn
+                variant="primary"
+                size="md"
+                full
+                type="button"
+                onClick={() => void handleFriendRematch(game.id)}
+                disabled={busy.value}
+              >
+                受ける
+              </Btn>
+              <Btn
+                variant="ghost"
+                size="md"
+                type="button"
+                onClick={() => { dismissFriendRematchInvite(game.id, rematchInviteState.acceptedCount); }}
+              >
+                あとで
+              </Btn>
+            </div>
+          </div>
+        ) : null}
       </Modal>
     </div>
   );
@@ -1567,8 +1609,11 @@ async function handleLogout(): Promise<void> {
     analysisSnapshot.value = null;
     friendPasscodes.value = {};
     friendRematch.value = null;
+    friendRematchInvite.value = null;
+    dismissedRematchInvites.value = {};
     appStage.value = "mode-select";
     stopRematchPolling();
+    stopRematchInvitePolling();
     closeRealtime();
   });
 }
@@ -1614,7 +1659,9 @@ async function selectGame(gameId: string): Promise<void> {
     analysisSelectedSquare.value = null;
     analysisSelectedHand.value = null;
     stopRematchPolling();
+    stopRematchInvitePolling();
     friendRematch.value = null;
+    friendRematchInvite.value = null;
     appStage.value = "playing";
     connectRealtime(gameId);
     await refreshEvents();
@@ -1633,7 +1680,9 @@ function returnToModeSelect(): void {
   analysisSelectedSquare.value = null;
   analysisSelectedHand.value = null;
   stopRematchPolling();
+  stopRematchInvitePolling();
   friendRematch.value = null;
+  friendRematchInvite.value = null;
   closeRealtime();
 }
 
@@ -1717,6 +1766,7 @@ async function handleFriendRematch(gameId: string): Promise<void> {
   const passcode = friendPasscodes.value[gameId];
   if (!passcode || busy.value) return;
   await withBusy(async () => {
+    friendRematchInvite.value = null;
     await acceptFriendRematch(gameId, passcode);
   });
 }
@@ -1726,7 +1776,9 @@ async function acceptFriendRematch(gameId: string, passcode: string): Promise<vo
   rememberFriendPasscode(response.game.id, passcode);
   if (response.rematch.status === "started") {
     stopRematchPolling();
+    stopRematchInvitePolling();
     friendRematch.value = null;
+    friendRematchInvite.value = null;
     applyGameSnapshot(response.game);
     selectedSquare.value = null;
     selectedHand.value = null;
@@ -1748,6 +1800,31 @@ async function acceptFriendRematch(gameId: string, passcode: string): Promise<vo
   };
   startRematchPolling(gameId, passcode);
   await refreshGames();
+}
+
+async function refreshFriendRematchInvite(gameId: string, passcode: string): Promise<void> {
+  const currentGame = activeGame.value;
+  if (currentGame?.id !== gameId) return;
+  const response = await getFriendRematchStatus(gameId, passcode);
+  const latestGame = activeGame.value;
+  if (latestGame?.id !== gameId) return;
+  applyGameSnapshot(response.game);
+  const rematch = response.rematch;
+  if (!rematch || rematch.acceptedByCurrentUser || rematch.status === "started") {
+    friendRematchInvite.value = null;
+    return;
+  }
+  if (friendRematch.value?.gameId === gameId) {
+    friendRematchInvite.value = null;
+    return;
+  }
+  const dismissedAtCount = dismissedRematchInvites.value[gameId];
+  if (dismissedAtCount === rematch.acceptedCount) return;
+  friendRematchInvite.value = {
+    gameId,
+    acceptedCount: rematch.acceptedCount,
+    requiredCount: rematch.requiredCount,
+  };
 }
 
 async function toggleAnalysisMode(gameId: string): Promise<void> {
@@ -1919,6 +1996,25 @@ function startRematchPolling(gameId: string, passcode: string): void {
   }, 2500);
 }
 
+function startRematchInvitePolling(gameId: string, passcode: string): void {
+  if (rematchInvitePollingTimer !== null) return;
+  void refreshFriendRematchInvite(gameId, passcode).catch(showError);
+  rematchInvitePollingTimer = window.setInterval(() => {
+    if (activeGame.value?.id !== gameId || activeGame.value.status !== "ended") {
+      stopRematchInvitePolling();
+      return;
+    }
+    void refreshFriendRematchInvite(gameId, passcode).catch(showError);
+  }, 2500);
+}
+
+function stopRematchInvitePolling(): void {
+  if (rematchInvitePollingTimer !== null) {
+    window.clearInterval(rematchInvitePollingTimer);
+    rematchInvitePollingTimer = null;
+  }
+}
+
 function stopRematchPolling(): void {
   if (rematchPollingTimer !== null) {
     window.clearInterval(rematchPollingTimer);
@@ -1949,6 +2045,13 @@ function applyGameSnapshot(game: GameSnapshot): void {
     analysisSnapshot.value = null;
     analysisSelectedSquare.value = null;
     analysisSelectedHand.value = null;
+    stopRematchInvitePolling();
+    friendRematchInvite.value = null;
+  } else if (game.mode === "friend") {
+    const passcode = friendPasscodes.value[game.id];
+    if (passcode) {
+      startRematchInvitePolling(game.id, passcode);
+    }
   }
   if (!user.value) return;
   const color = myColor(game, user.value.id);
@@ -1971,6 +2074,13 @@ function applyGameSnapshot(game: GameSnapshot): void {
 
 function rememberFriendPasscode(gameId: string, passcode: string): void {
   friendPasscodes.value = { ...friendPasscodes.value, [gameId]: passcode };
+}
+
+function dismissFriendRematchInvite(gameId: string, acceptedCount: number): void {
+  dismissedRematchInvites.value = { ...dismissedRematchInvites.value, [gameId]: acceptedCount };
+  if (friendRematchInvite.value?.gameId === gameId) {
+    friendRematchInvite.value = null;
+  }
 }
 
 function cloneHands(hands: Record<PlayerColor, HandPiece[]>): Record<PlayerColor, HandPiece[]> {

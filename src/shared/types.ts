@@ -151,6 +151,16 @@ export type FriendRematchResponse = {
   };
 };
 
+export type FriendRematchStatusResponse = {
+  game: GameSnapshot;
+  rematch: {
+    status: "waiting" | "started";
+    acceptedCount: number;
+    requiredCount: number;
+    acceptedByCurrentUser: boolean;
+  } | null;
+};
+
 export type AnalysisSnapshot = {
   gameId: string;
   sourceGameVersion: number;

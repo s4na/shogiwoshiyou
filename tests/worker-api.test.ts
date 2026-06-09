@@ -337,7 +337,25 @@ describe("GameRoom moves", () => {
 
     const black = await registerViaApi(env, origin, "friend_black");
     const white = await registerViaApi(env, origin, "friend_white");
-    const passcode = " shared-friend-passcode ";
+    const passcode = " abc123 ";
+
+    const tooShort = await app.request(
+      `${origin}/api/games`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          cookie: black.cookie,
+          origin,
+        },
+        body: JSON.stringify({ mode: "friend", passcode: "abc12" }),
+      },
+      env,
+    );
+    const tooShortBody: { error?: { code?: string } } = await tooShort.json();
+
+    expect(tooShort.status).toBe(400);
+    expect(tooShortBody.error?.code).toBe("validation_error");
 
     const first = await app.request(
       `${origin}/api/games`,
@@ -515,6 +533,24 @@ describe("GameRoom moves", () => {
     );
     expect(resigned.status).toBe(200);
 
+    const emptyRematchStatus = await app.request(
+      `${origin}/api/games/${gameId}/rematch/status`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          cookie: white.cookie,
+          origin,
+        },
+        body: JSON.stringify({ passcode: passcode.trim() }),
+      },
+      env,
+    );
+    const emptyRematchStatusBody: { rematch?: unknown } = await emptyRematchStatus.json();
+
+    expect(emptyRematchStatus.status).toBe(200);
+    expect(emptyRematchStatusBody.rematch).toBeNull();
+
     const wrongPasscodeRematch = await app.request(
       `${origin}/api/games/${gameId}/rematch`,
       {
@@ -559,6 +595,64 @@ describe("GameRoom moves", () => {
       requiredCount: 2,
     });
 
+    const blackRematchStatus = await app.request(
+      `${origin}/api/games/${gameId}/rematch/status`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          cookie: black.cookie,
+          origin,
+        },
+        body: JSON.stringify({ passcode: passcode.trim() }),
+      },
+      env,
+    );
+    const blackRematchStatusBody: {
+      rematch?: {
+        status?: string;
+        acceptedCount?: number;
+        requiredCount?: number;
+        acceptedByCurrentUser?: boolean;
+      } | null;
+    } = await blackRematchStatus.json();
+    const whiteRematchStatus = await app.request(
+      `${origin}/api/games/${gameId}/rematch/status`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          cookie: white.cookie,
+          origin,
+        },
+        body: JSON.stringify({ passcode: passcode.trim() }),
+      },
+      env,
+    );
+    const whiteRematchStatusBody: {
+      rematch?: {
+        status?: string;
+        acceptedCount?: number;
+        requiredCount?: number;
+        acceptedByCurrentUser?: boolean;
+      } | null;
+    } = await whiteRematchStatus.json();
+
+    expect(blackRematchStatus.status).toBe(200);
+    expect(blackRematchStatusBody.rematch).toEqual({
+      status: "waiting",
+      acceptedCount: 1,
+      requiredCount: 2,
+      acceptedByCurrentUser: true,
+    });
+    expect(whiteRematchStatus.status).toBe(200);
+    expect(whiteRematchStatusBody.rematch).toEqual({
+      status: "waiting",
+      acceptedCount: 1,
+      requiredCount: 2,
+      acceptedByCurrentUser: false,
+    });
+
     const secondRematch = await app.request(
       `${origin}/api/games/${gameId}/rematch`,
       {
@@ -586,6 +680,36 @@ describe("GameRoom moves", () => {
       status: "started",
       acceptedCount: 2,
       requiredCount: 2,
+    });
+
+    const startedRematchStatus = await app.request(
+      `${origin}/api/games/${gameId}/rematch/status`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          cookie: white.cookie,
+          origin,
+        },
+        body: JSON.stringify({ passcode: passcode.trim() }),
+      },
+      env,
+    );
+    const startedRematchStatusBody: {
+      rematch?: {
+        status?: string;
+        acceptedCount?: number;
+        requiredCount?: number;
+        acceptedByCurrentUser?: boolean;
+      } | null;
+    } = await startedRematchStatus.json();
+
+    expect(startedRematchStatus.status).toBe(200);
+    expect(startedRematchStatusBody.rematch).toEqual({
+      status: "started",
+      acceptedCount: 2,
+      requiredCount: 2,
+      acceptedByCurrentUser: true,
     });
 
     const firstJoinsRematch = await app.request(

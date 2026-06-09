@@ -7,6 +7,7 @@ import type {
   GameResponse,
   GamesResponse,
   FriendRematchResponse,
+  FriendRematchStatusResponse,
   MoveResponse,
   SessionPayload,
 } from "../shared/types";
@@ -111,6 +112,17 @@ export async function resignGame(gameId: string, requestId: string): Promise<Gam
 export async function requestFriendRematch(gameId: string, passcode: string): Promise<FriendRematchResponse> {
   return api<FriendRematchResponse>(
     `/api/games/${gameId}/rematch`,
+    {
+      method: "POST",
+      body: JSON.stringify({ passcode }),
+    },
+    1,
+  );
+}
+
+export async function getFriendRematchStatus(gameId: string, passcode: string): Promise<FriendRematchStatusResponse> {
+  return api<FriendRematchStatusResponse>(
+    `/api/games/${gameId}/rematch/status`,
     {
       method: "POST",
       body: JSON.stringify({ passcode }),
