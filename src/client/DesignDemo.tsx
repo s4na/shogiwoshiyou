@@ -877,7 +877,7 @@ function MockModeSelectPasscodeOpen() {
               backgroundColor: t.bg.elevated,
             }}
           >
-            <FieldGroup id="demo-passcode" label="合言葉" helpId="demo-passcode-help" help="6〜64文字。推測されにくい合言葉を相手だけに共有します。">
+            <FieldGroup id="demo-passcode" label="合言葉" helpId="demo-passcode-help" help="6〜64文字。abc123 や password など推測されやすい合言葉は使えません。">
               <Input id="demo-passcode" placeholder="" />
             </FieldGroup>
             <div style={{ display: "flex", gap: 8 }}>
