@@ -4,6 +4,7 @@ import type {
   BoardPiece,
   BoardSquare,
   FriendRematchResponse,
+  FriendRematchStatusResponse,
   GameResponse,
   HandPiece,
   PlayerColor,
@@ -113,6 +114,10 @@ export class GameRoom implements DurableObject {
       if (url.pathname === "/friend-rematch" && request.method === "POST") {
         const body: Partial<FriendRematchRequest> = await request.json();
         return await this.requestFriendRematch(userId, body);
+      }
+      if (url.pathname === "/friend-rematch-status" && request.method === "POST") {
+        const body: Partial<FriendRematchRequest> = await request.json();
+        return await this.friendRematchStatus(userId, body);
       }
       if (url.pathname === "/move" && request.method === "POST") {
         const body: Partial<MoveRequest> = await request.json();
@@ -328,6 +333,46 @@ export class GameRoom implements DurableObject {
       nextGameId,
     } satisfies StoredFriendRematch);
     return await this.startedFriendRematchResponse(nextGameId, userId);
+  }
+
+  private async friendRematchStatus(
+    userId: string,
+    body: Partial<FriendRematchRequest>,
+  ): Promise<Response> {
+    const gameId = validateGameId(body.gameId);
+    const game = await this.loadGameById(gameId);
+    if (!game) {
+      throw new RoomError(404, "game_not_found", "対局が見つかりません。");
+    }
+    this.ensureCanViewGame(game, userId);
+    if (game.mode !== "friend") {
+      throw new RoomError(409, "not_friend_game", "友達対戦ではありません。");
+    }
+    if (game.status !== "ended") {
+      return Response.json({
+        ...(await this.snapshotPayload(game)),
+        rematch: null,
+      } satisfies FriendRematchStatusResponse);
+    }
+
+    const previous = await this.state.storage.get<StoredFriendRematch>(friendRematchStorageKey(game.id));
+    if (!previous) {
+      return Response.json({
+        ...(await this.snapshotPayload(game)),
+        rematch: null,
+      } satisfies FriendRematchStatusResponse);
+    }
+
+    const acceptedUserIds = previous.acceptedUserIds.filter((id) => id === game.blackUserId || id === game.whiteUserId);
+    return Response.json({
+      ...(await this.snapshotPayload(game)),
+      rematch: {
+        status: previous.nextGameId ? "started" : "waiting",
+        acceptedCount: previous.nextGameId ? 2 : acceptedUserIds.length,
+        requiredCount: 2,
+        acceptedByCurrentUser: acceptedUserIds.includes(userId),
+      },
+    } satisfies FriendRematchStatusResponse);
   }
 
   private async startedFriendRematchResponse(nextGameId: string, userId: string): Promise<Response> {

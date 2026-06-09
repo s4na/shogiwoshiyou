@@ -62,9 +62,37 @@ const profileSchema = z.object({
   displayName: displayNameSchema,
 });
 
+const weakPasscodeWords = new Set(["password", "qwerty", "abc123"]);
+const weakPasscodeSequences = [
+  "0123456789",
+  "9876543210",
+  "abcdefghijklmnopqrstuvwxyz",
+  "zyxwvutsrqponmlkjihgfedcba",
+  "qwertyuiop",
+  "poiuytrewq",
+  "asdfghjkl",
+  "lkjhgfdsa",
+  "zxcvbnm",
+  "mnbvcxz",
+];
+
+function isWeakPasscode(value: string): boolean {
+  const normalized = value.toLowerCase();
+  if (
+    /^(.)\1+$/.test(normalized) ||
+    /^\d{6,8}$/.test(normalized) ||
+    weakPasscodeWords.has(normalized)
+  ) {
+    return true;
+  }
+  return weakPasscodeSequences.some((sequence) => sequence.includes(normalized));
+}
+
 const createGameSchema = z.object({
   mode: z.enum(["cpu", "friend"]).default("cpu"),
-  passcode: z.string().trim().min(12).max(64).optional(),
+  passcode: z.string().trim().min(6).max(64).refine((value) => !isWeakPasscode(value), {
+    message: "推測されやすい合言葉は使えません。",
+  }).optional(),
 });
 
 const moveSchema = z.object({
@@ -206,6 +234,16 @@ app.post("/api/games/:id/rematch", zValidator("json", createGameSchema.pick({ pa
   return requestFriendRematch(c.env, c.get("user").id, passcode, gameId);
 });
 
+app.post("/api/games/:id/rematch/status", zValidator("json", createGameSchema.pick({ passcode: true }), validationHook), async (c) => {
+  ensureSameOrigin(c);
+  const gameId = validGameId(c.req.param("id"));
+  const passcode = c.req.valid("json").passcode?.trim();
+  if (!passcode) {
+    throw new HttpError(400, "passcode_required", "もう一局には合言葉が必要です。");
+  }
+  return requestFriendRematchStatus(c.env, c.get("user").id, passcode, gameId);
+});
+
 app.get("/api/games/:id/export.kif", async (c) => {
   const gameId = validGameId(c.req.param("id"));
   return callGameRoom(c.env, gameId, c.get("user").id, "/export/kif", { method: "GET" });
@@ -291,6 +329,19 @@ async function requestFriendRematch(
 ): Promise<Response> {
   const lobbyId = friendGameId(await sha256Hex(passcode));
   return callGameRoom(env, lobbyId, userId, "/friend-rematch", {
+    method: "POST",
+    body: JSON.stringify({ gameId }),
+  });
+}
+
+async function requestFriendRematchStatus(
+  env: Env,
+  userId: string,
+  passcode: string,
+  gameId: string,
+): Promise<Response> {
+  const lobbyId = friendGameId(await sha256Hex(passcode));
+  return callGameRoom(env, lobbyId, userId, "/friend-rematch-status", {
     method: "POST",
     body: JSON.stringify({ gameId }),
   });
