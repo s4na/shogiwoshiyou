@@ -1294,6 +1294,7 @@ function ShogiBoard({
           : []
       : [],
   );
+  const restrictingHandDropTargets = canShowLegalDestinations && selectedHand.value !== null;
 
   return (
     <div ref={outerRef} style={{ width: "min(72svh, 100%)", maxWidth: 648, margin: "8px auto" }}>
@@ -1339,6 +1340,12 @@ function ShogiBoard({
               const sq = square.square;
               const isLastMove = sq === lastFrom || sq === lastTo;
               const isLegalDestination = legalDestinations.has(sq);
+              const canSwitchPieceSelection = restrictingHandDropTargets && square.piece?.color === color;
+              const disabledByHandDrop =
+                restrictingHandDropTargets && !isLegalDestination && !canSwitchPieceSelection;
+              const squareCursor = disabledByHandDrop
+                ? "not-allowed"
+                : isLegalDestination || canSwitchPieceSelection ? "pointer" : "default";
               const analysisSelected = analysisMode.value && analysisSelectedSquare.value === square.square;
 
               let bgColor = "transparent";
@@ -1351,7 +1358,7 @@ function ShogiBoard({
                   type="button"
                   key={square.square}
                   onClick={() => void handleSquareClick(square.square)}
-                  disabled={busy.value}
+                  disabled={busy.value || disabledByHandDrop}
                   aria-label={boardSquareLabel(square.square, square.piece, selected || analysisSelected, isLegalDestination)}
                   style={{
                     width: cellSize,
@@ -1363,7 +1370,8 @@ function ShogiBoard({
                     borderRadius: 0,
                     backgroundColor: bgColor,
                     padding: 0,
-                    cursor: "default",
+                    cursor: squareCursor,
+                    opacity: disabledByHandDrop ? 0.5 : 1,
                     transition: `background-color ${MOTION.fast}`,
                     position: "relative",
                     overflow: "visible",
@@ -1807,7 +1815,9 @@ async function handleSquareClick(square: string): Promise<void> {
       selectedSquare.value = square;
       return;
     }
-    if (myTurn) { await submitMove(dropUsi(selectedHand.value, square)); return; }
+    if (myTurn && legalDropDestinations(game, selectedHand.value).includes(square)) {
+      await submitMove(dropUsi(selectedHand.value, square));
+    }
     return;
   }
   if (!selectedSquare.value) {

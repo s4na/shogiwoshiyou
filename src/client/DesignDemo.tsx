@@ -452,8 +452,9 @@ const BOARD_ACTIVE: BoardGrid = [
 
 const LAST_FROM: [number, number] = [6, 2];
 const LAST_TO:   [number, number] = [6, 3];
-const SEL_CELL:  [number, number] = [2, 6]; // 7七の歩を選択中
-const LEGAL_MVS: [number, number][] = [[2, 5], [2, 4]];
+const BISHOP_DROP_MVS: [number, number][] = BOARD_ACTIVE.flatMap((row, ri) =>
+  row.flatMap((piece, ci) => (piece ? [] : [[ci, ri] as [number, number]])),
+);
 
 // ─── Interactive board demo ───────────────────────────
 
@@ -706,7 +707,7 @@ function cellEq(cell: [number, number] | undefined, c: number, r: number): boole
 }
 
 function StaticBoard({
-  grid, selected, lastFrom, lastTo, legalMoves, checkCell, cellSize = 36, onCellClick,
+  grid, selected, lastFrom, lastTo, legalMoves, checkCell, cellSize = 36, switchableColor, onCellClick,
 }: {
   grid: BoardGrid;
   selected?: [number, number];
@@ -715,6 +716,7 @@ function StaticBoard({
   legalMoves?: [number, number][];
   checkCell?: [number, number];
   cellSize?: number;
+  switchableColor?: MockPiece["color"];
   onCellClick?: (ci: number, ri: number) => void;
 }) {
   const t = useTheme();
@@ -736,9 +738,13 @@ function StaticBoard({
             const isLast  = cellEq(lastFrom,  ci, ri) || cellEq(lastTo, ci, ri);
             const isLegal = legalMoves?.some(([lc,lr]) => lc===ci && lr===ri) ?? false;
             const isCheck = cellEq(checkCell, ci, ri);
+            const restrictingTargets = switchableColor !== undefined;
+            const canSwitchSelection = restrictingTargets && piece?.color === switchableColor;
+            const disabledTarget = restrictingTargets && !isLegal && !canSwitchSelection;
+            const targetCursor = disabledTarget ? "not-allowed" : isLegal || canSwitchSelection || onCellClick ? "pointer" : "default";
             const bg = isSel ? t.semantic.selected : isCheck ? t.semantic.check : isLast ? t.semantic.lastMove : isLegal ? t.semantic.legalMove : "transparent";
             return (
-              <div key={`${String(ci)}-${String(ri)}`} onClick={onCellClick ? () => { onCellClick(ci, ri); } : undefined} style={{ width: cellSize, height: cellSize, display: "flex", alignItems: "center", justifyContent: "center", border: `0.5px solid ${t.board.grid}`, backgroundColor: bg, position: "relative", cursor: onCellClick ? "pointer" : "default" }}>
+              <div key={`${String(ci)}-${String(ri)}`} onClick={onCellClick && !disabledTarget ? () => { onCellClick(ci, ri); } : undefined} style={{ width: cellSize, height: cellSize, display: "flex", alignItems: "center", justifyContent: "center", border: `0.5px solid ${t.board.grid}`, backgroundColor: bg, position: "relative", cursor: targetCursor, opacity: disabledTarget ? 0.5 : 1 }}>
                 {isStar && <div style={{ position: "absolute", top: -2, left: -2, width: 4, height: 4, borderRadius: R.full, backgroundColor: t.board.star }} />}
                 {piece && <ShogiPiece kanji={piece.kanji} size={ps} {...(piece.promoted ? { promoted: true } : {})} flipped={piece.color==="w"} selected={isSel} />}
               </div>
@@ -757,18 +763,21 @@ function StaticBoard({
 
 // ─── Screen mockup building blocks ───────────────────
 
-function MockHand({ side, pieces }: { side: "black"|"white"; pieces: { kanji: string; count: number }[] }) {
+function MockHand({ side, pieces, selectedKanji }: { side: "black"|"white"; pieces: { kanji: string; count: number }[]; selectedKanji?: string }) {
   const t = useTheme();
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8, minHeight: 44, padding: "4px 0", justifyContent: side==="white" ? "flex-start" : "flex-end", flexWrap: "wrap" }}>
       <span style={{ fontFamily: fG, fontSize: 11, fontWeight: 600, color: t.text.tertiary }}>{side==="black" ? "先手" : "後手"}持駒</span>
       {pieces.length===0 && <span style={{ fontFamily: fG, fontSize: 12, color: t.text.tertiary }}>なし</span>}
-      {pieces.map(({ kanji, count }) => (
-        <div key={kanji} style={{ display: "flex", alignItems: "center", gap: 3, padding: "4px 8px 4px 4px", backgroundColor: t.bg.tertiary, border: `1px solid ${t.border.default}`, borderRadius: R.md }}>
-          <ShogiPiece kanji={kanji} size={26} />
-          <span style={{ fontFamily: fG, fontSize: 11, fontWeight: 700, color: t.accent.gold }}>{count}</span>
-        </div>
-      ))}
+      {pieces.map(({ kanji, count }) => {
+        const selected = selectedKanji === kanji;
+        return (
+          <div key={kanji} style={{ display: "flex", alignItems: "center", gap: 3, padding: "4px 8px 4px 4px", backgroundColor: selected ? t.semantic.selected : t.bg.tertiary, border: `1px solid ${selected ? t.accent.gold : t.border.default}`, borderRadius: R.md }}>
+            <ShogiPiece kanji={kanji} size={26} />
+            <span style={{ fontFamily: fG, fontSize: 11, fontWeight: 700, color: t.accent.gold }}>{count}</span>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -924,15 +933,17 @@ function MockBoardPanel({ gameState }: { gameState: "my-turn"|"cpu-thinking"|"wo
       } />
       <StaticBoard
         grid={BOARD_ACTIVE}
-        {...(gameState==="my-turn" ? { selected: SEL_CELL, legalMoves: LEGAL_MVS } : {})}
+        {...(gameState==="my-turn" ? { legalMoves: BISHOP_DROP_MVS, switchableColor: "b" as const } : {})}
         {...(gameState==="won" ? { checkCell: [4, 0] as [number, number] } : {})}
         lastFrom={LAST_FROM}
         lastTo={LAST_TO}
         cellSize={28}
       />
-      <MockHand side="black" pieces={
-        gameState!=="waiting" ? [{ kanji:"歩", count:4 }, { kanji:"香", count:1 }, { kanji:"角", count:1 }] : []
-      } />
+      <MockHand
+        side="black"
+        pieces={gameState!=="waiting" ? [{ kanji:"歩", count:4 }, { kanji:"香", count:1 }, { kanji:"角", count:1 }] : []}
+        {...(gameState==="my-turn" ? { selectedKanji: "角" } : {})}
+      />
       {gameState==="won" && (
         <div
           style={{
@@ -1084,7 +1095,7 @@ function ScreenFlows() {
         </div>
       </ScreenFrame>
 
-      <ScreenFrame label="④ 対局モード — あなたの手番（7七歩を選択、合法手を緑ハイライト）">
+      <ScreenFrame label="④ 対局モード — あなたの手番（持ち駒の角を選択、打てるマスと自駒だけ操作可能）">
         <AppHeaderMock userSlot={<OnlineChip />} />
         <div style={{ backgroundColor: t.bg.primary, padding: 16, overflowX: "auto" }}>
           <PlayScreenMock gameState="my-turn" />
