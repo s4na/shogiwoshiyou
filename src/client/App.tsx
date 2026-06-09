@@ -1340,8 +1340,12 @@ function ShogiBoard({
               const sq = square.square;
               const isLastMove = sq === lastFrom || sq === lastTo;
               const isLegalDestination = legalDestinations.has(sq);
+              const canSwitchPieceSelection = restrictingHandDropTargets && square.piece?.color === color;
               const disabledByHandDrop =
-                restrictingHandDropTargets && !isLegalDestination && square.piece?.color !== color;
+                restrictingHandDropTargets && !isLegalDestination && !canSwitchPieceSelection;
+              const squareCursor = disabledByHandDrop
+                ? "not-allowed"
+                : isLegalDestination || canSwitchPieceSelection ? "pointer" : "default";
               const analysisSelected = analysisMode.value && analysisSelectedSquare.value === square.square;
 
               let bgColor = "transparent";
@@ -1366,7 +1370,7 @@ function ShogiBoard({
                     borderRadius: 0,
                     backgroundColor: bgColor,
                     padding: 0,
-                    cursor: disabledByHandDrop ? "not-allowed" : isLegalDestination ? "pointer" : "default",
+                    cursor: squareCursor,
                     opacity: disabledByHandDrop ? 0.5 : 1,
                     transition: `background-color ${MOTION.fast}`,
                     position: "relative",

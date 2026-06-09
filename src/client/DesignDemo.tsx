@@ -738,10 +738,12 @@ function StaticBoard({
             const isLast  = cellEq(lastFrom,  ci, ri) || cellEq(lastTo, ci, ri);
             const isLegal = legalMoves?.some(([lc,lr]) => lc===ci && lr===ri) ?? false;
             const isCheck = cellEq(checkCell, ci, ri);
-            const disabledTarget = Boolean(restrictToLegalMoves && !isLegal && piece?.color !== "b");
+            const canSwitchSelection = Boolean(restrictToLegalMoves && piece?.color === "b");
+            const disabledTarget = Boolean(restrictToLegalMoves && !isLegal && !canSwitchSelection);
+            const targetCursor = disabledTarget ? "not-allowed" : isLegal || canSwitchSelection || onCellClick ? "pointer" : "default";
             const bg = isSel ? t.semantic.selected : isCheck ? t.semantic.check : isLast ? t.semantic.lastMove : isLegal ? t.semantic.legalMove : "transparent";
             return (
-              <div key={`${String(ci)}-${String(ri)}`} onClick={onCellClick && !disabledTarget ? () => { onCellClick(ci, ri); } : undefined} style={{ width: cellSize, height: cellSize, display: "flex", alignItems: "center", justifyContent: "center", border: `0.5px solid ${t.board.grid}`, backgroundColor: bg, position: "relative", cursor: disabledTarget ? "not-allowed" : onCellClick ? "pointer" : "default", opacity: disabledTarget ? 0.5 : 1 }}>
+              <div key={`${String(ci)}-${String(ri)}`} onClick={onCellClick && !disabledTarget ? () => { onCellClick(ci, ri); } : undefined} style={{ width: cellSize, height: cellSize, display: "flex", alignItems: "center", justifyContent: "center", border: `0.5px solid ${t.board.grid}`, backgroundColor: bg, position: "relative", cursor: targetCursor, opacity: disabledTarget ? 0.5 : 1 }}>
                 {isStar && <div style={{ position: "absolute", top: -2, left: -2, width: 4, height: 4, borderRadius: R.full, backgroundColor: t.board.star }} />}
                 {piece && <ShogiPiece kanji={piece.kanji} size={ps} {...(piece.promoted ? { promoted: true } : {})} flipped={piece.color==="w"} selected={isSel} />}
               </div>
