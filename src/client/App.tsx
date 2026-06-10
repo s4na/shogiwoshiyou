@@ -878,9 +878,9 @@ function ModeSelectGameList() {
 const MOBILE_BP = 640;
 
 function useIsMobile(): boolean {
-  const [mobile, setMobile] = useState(() => window.innerWidth <= MOBILE_BP);
+  const [mobile, setMobile] = useState(() => window.matchMedia(`(max-width: ${MOBILE_BP}px)`).matches);
   useEffect(() => {
-    const mq = window.matchMedia(`(max-width: ${String(MOBILE_BP)}px)`);
+    const mq = window.matchMedia(`(max-width: ${MOBILE_BP}px)`);
     const handler = (e: MediaQueryListEvent) => { setMobile(e.matches); };
     mq.addEventListener("change", handler);
     return () => { mq.removeEventListener("change", handler); };
@@ -895,10 +895,17 @@ function PlayScreen() {
   const game = activeGame.value;
   const gameEnded = game?.status === "ended";
 
+  useEffect(() => {
+    if (!drawerOpen) return;
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") setDrawerOpen(false); };
+    document.addEventListener("keydown", handler);
+    return () => { document.removeEventListener("keydown", handler); };
+  }, [drawerOpen]);
+
   return (
     <main
       className="play-layout"
-      style={{ maxWidth: 1080, margin: "0 auto", padding: "12px 24px 60px", overflow: "hidden" }}
+      style={{ maxWidth: 1080, margin: "0 auto", padding: "12px 24px 60px", overflowX: "hidden" }}
     >
       {gameEnded && (
         <div style={{ alignSelf: "flex-start" }}><GameListPanel /></div>
@@ -913,6 +920,7 @@ function PlayScreen() {
             type="button"
             onClick={() => { setDrawerOpen((o) => !o); }}
             aria-label={drawerOpen ? "棋譜を閉じる" : "棋譜を開く"}
+            aria-expanded={drawerOpen}
             style={{
               position: "fixed",
               top: 80,
@@ -926,7 +934,7 @@ function PlayScreen() {
               backgroundColor: t.bg.elevated,
               border: `1px solid ${t.border.default}`,
               borderRight: drawerOpen ? "none" : `1px solid ${t.border.default}`,
-              borderRadius: drawerOpen ? "8px 0 0 8px" : "8px 0 0 8px",
+              borderRadius: "8px 0 0 8px",
               color: t.text.secondary,
               fontSize: 16,
               cursor: "pointer",
