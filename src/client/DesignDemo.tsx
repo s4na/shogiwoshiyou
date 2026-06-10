@@ -1338,6 +1338,9 @@ function PlaygroundPlayScreen({
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <StatusChip color={error === "network" ? t.semantic.offline : t.semantic.online}>{error === "network" ? "再接続中" : "接続"}</StatusChip>
+                {gameState === "won" && <Btn variant="secondary" size="sm">感想戦</Btn>}
+                {gameState === "won" && <Btn variant="primary" size="sm" onClick={() => { onNextState("my-turn"); }}>もう一局</Btn>}
+                <Btn variant="secondary" size="sm">棋譜DL</Btn>
                 {gameState === "my-turn" && <Btn variant="danger" size="sm" onClick={() => { onNextState("won"); }}>投了</Btn>}
               </div>
             </div>
@@ -1364,11 +1367,14 @@ function PlaygroundPlayScreen({
                     <Btn variant="secondary" size="sm" full>感想戦</Btn>
                     <Btn variant="primary" size="sm" full onClick={() => { onNextState("my-turn"); }}>もう一局</Btn>
                   </div>
+                  <div style={{ display: "flex", justifyContent: "center" }}>
+                    <Btn variant="ghost" size="sm">盤面を見る</Btn>
+                  </div>
                 </div>
               </div>
             )}
           </div>
-          {!compact && <MockHistoryPanel />}
+          <MockHistoryPanel />
         </div>
       </div>
     </div>
