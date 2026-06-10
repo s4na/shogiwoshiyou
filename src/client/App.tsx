@@ -878,9 +878,9 @@ function ModeSelectGameList() {
 const MOBILE_BP = 640;
 
 function useIsMobile(): boolean {
-  const [mobile, setMobile] = useState(() => window.matchMedia(`(max-width: ${MOBILE_BP}px)`).matches);
+  const [mobile, setMobile] = useState(() => window.matchMedia(`(max-width: ${String(MOBILE_BP)}px)`).matches);
   useEffect(() => {
-    const mq = window.matchMedia(`(max-width: ${MOBILE_BP}px)`);
+    const mq = window.matchMedia(`(max-width: ${String(MOBILE_BP)}px)`);
     const handler = (e: MediaQueryListEvent) => { setMobile(e.matches); };
     mq.addEventListener("change", handler);
     return () => { mq.removeEventListener("change", handler); };
