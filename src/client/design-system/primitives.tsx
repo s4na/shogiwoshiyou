@@ -228,7 +228,9 @@ export function Modal({
           boxShadow: t.shadow.lg,
           width: "100%",
           maxWidth: 360,
-          overflow: "hidden",
+          maxHeight: "calc(100svh - 32px)",
+          display: "flex",
+          flexDirection: "column",
         }}
       >
         {title && (
@@ -240,12 +242,13 @@ export function Modal({
               fontSize: 16,
               fontWeight: 700,
               color: t.text.primary,
+              flexShrink: 0,
             }}
           >
             {title}
           </div>
         )}
-        <div style={{ padding: 20 }}>{children}</div>
+        <div style={{ padding: 20, overflowY: "auto" }}>{children}</div>
       </div>
     </div>
   );
