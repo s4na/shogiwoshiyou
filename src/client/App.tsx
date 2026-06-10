@@ -168,6 +168,10 @@ export function App() {
         input::placeholder { color: ${theme.text.tertiary}; }
         .play-layout { display: flex; flex-direction: column; align-items: center; gap: 8px; }
         .play-board-row { display: flex; gap: 12px; align-items: start; justify-content: center; }
+        @media (max-width: 640px) {
+          .play-layout { padding-left: 8px !important; padding-right: 8px !important; }
+          .play-board-row { gap: 0; }
+        }
       `}</style>
 
       <div
@@ -871,17 +875,106 @@ function ModeSelectGameList() {
 }
 
 // ─── Play layout ──────────────────────────────────────
+const MOBILE_BP = 640;
+
+function useIsMobile(): boolean {
+  const [mobile, setMobile] = useState(() => window.matchMedia(`(max-width: ${String(MOBILE_BP)}px)`).matches);
+  useEffect(() => {
+    const mq = window.matchMedia(`(max-width: ${String(MOBILE_BP)}px)`);
+    const handler = (e: MediaQueryListEvent) => { setMobile(e.matches); };
+    mq.addEventListener("change", handler);
+    return () => { mq.removeEventListener("change", handler); };
+  }, []);
+  return mobile;
+}
+
 function PlayScreen() {
+  const t = useTheme();
+  const isMobile = useIsMobile();
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const game = activeGame.value;
+  const gameEnded = game?.status === "ended";
+
+  useEffect(() => {
+    if (!drawerOpen) return;
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") setDrawerOpen(false); };
+    document.addEventListener("keydown", handler);
+    return () => { document.removeEventListener("keydown", handler); };
+  }, [drawerOpen]);
+
   return (
     <main
       className="play-layout"
-      style={{ maxWidth: 1080, margin: "0 auto", padding: "12px 24px 60px" }}
+      style={{ maxWidth: 1080, margin: "0 auto", padding: "12px 24px 60px", overflowX: "hidden" }}
     >
-      <div style={{ alignSelf: "flex-start" }}><GameListPanel /></div>
+      {gameEnded && (
+        <div style={{ alignSelf: "flex-start" }}><GameListPanel /></div>
+      )}
       <div className="play-board-row">
         <BoardPanel />
-        <HistoryPanel />
+        {!isMobile && <HistoryPanel />}
       </div>
+      {isMobile && (
+        <>
+          <button
+            type="button"
+            onClick={() => { setDrawerOpen((o) => !o); }}
+            aria-label={drawerOpen ? "棋譜を閉じる" : "棋譜を開く"}
+            aria-expanded={drawerOpen}
+            style={{
+              position: "fixed",
+              top: 80,
+              right: drawerOpen ? 201 : 0,
+              zIndex: ZINDEX.overlay + 1,
+              width: 36,
+              height: 36,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: t.bg.elevated,
+              border: `1px solid ${t.border.default}`,
+              borderRight: drawerOpen ? "none" : `1px solid ${t.border.default}`,
+              borderRadius: "8px 0 0 8px",
+              color: t.text.secondary,
+              fontSize: 16,
+              cursor: "pointer",
+              boxShadow: t.shadow.md,
+              transition: `right ${MOTION.normal}`,
+            }}
+          >
+            {drawerOpen ? "✕" : "☰"}
+          </button>
+          {drawerOpen && (
+            <div
+              onClick={() => { setDrawerOpen(false); }}
+              style={{
+                position: "fixed",
+                inset: 0,
+                backgroundColor: "rgba(0,0,0,0.3)",
+                zIndex: ZINDEX.overlay,
+              }}
+            />
+          )}
+          <div
+            style={{
+              position: "fixed",
+              top: 0,
+              right: drawerOpen ? 0 : -200,
+              width: 200,
+              height: "100svh",
+              backgroundColor: t.bg.secondary,
+              borderLeft: `1px solid ${t.border.default}`,
+              zIndex: ZINDEX.overlay + 1,
+              overflowY: "auto",
+              transition: `right ${MOTION.normal}`,
+              padding: "12px 0",
+              boxShadow: drawerOpen ? t.shadow.lg : "none",
+            }}
+          >
+            <HistoryPanel />
+          </div>
+        </>
+      )}
     </main>
   );
 }
@@ -999,6 +1092,8 @@ function BoardPanel() {
         border: `1px solid ${t.border.subtle}`,
         padding: "14px",
         boxShadow: t.shadow.sm,
+        minWidth: 0,
+        overflow: "hidden",
       }}
     >
       {/* Toolbar */}
@@ -1007,7 +1102,7 @@ function BoardPanel() {
           display: "flex",
           alignItems: "flex-start",
           justifyContent: "space-between",
-          gap: 12,
+          gap: 8,
           marginBottom: 12,
           flexWrap: "wrap",
         }}
@@ -1505,8 +1600,6 @@ function HistoryPanel() {
   const game = activeGame.value;
   const listRef = useRef<HTMLOListElement>(null);
 
-  // game.id を依存に含め、手数が同じゲームへ切り替えた場合もスクロールを発火させる。
-  // game は signal のオブジェクト置き換えで更新されるため moves.length の変化を検知できる。
   useEffect(() => {
     if (listRef.current) {
       listRef.current.scrollTop = listRef.current.scrollHeight;
@@ -1518,7 +1611,8 @@ function HistoryPanel() {
       style={{
         overflow: "hidden",
         opacity: 0.7,
-        width: 150,
+        width: "100%",
+        maxWidth: 150,
         flexShrink: 0,
       }}
     >

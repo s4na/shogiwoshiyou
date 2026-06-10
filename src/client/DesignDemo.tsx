@@ -911,7 +911,7 @@ function MockBoardPanel({ gameState }: { gameState: "my-turn"|"cpu-thinking"|"wo
   const { label, color } = statusMap[gameState];
   const isPlaying = gameState==="my-turn" || gameState==="cpu-thinking";
   return (
-    <div style={{ position: "relative", backgroundColor: t.bg.secondary, borderRadius: R.lg, border: `1px solid ${t.border.subtle}`, padding: 12, boxShadow: t.shadow.sm, overflow: "hidden" }}>
+    <div style={{ position: "relative", backgroundColor: t.bg.secondary, borderRadius: R.lg, border: `1px solid ${t.border.subtle}`, padding: 12, boxShadow: t.shadow.sm, minWidth: 0, overflow: "hidden" }}>
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, marginBottom: 10, flexWrap: "wrap" }}>
         <div>
           <StatusChip color={color}>{label}</StatusChip>
@@ -1022,9 +1022,10 @@ function MockHistoryPanel() {
 // ─── Full play screen layout ──────────────────────────
 
 function PlayScreenMock({ gameState }: { gameState: "my-turn"|"cpu-thinking"|"won"|"waiting" }) {
+  const gameEnded = gameState === "won";
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
-      <div style={{ alignSelf: "flex-start" }}><MockGameListPanel /></div>
+      {gameEnded && <div style={{ alignSelf: "flex-start" }}><MockGameListPanel /></div>}
       <div style={{ display: "flex", gap: 12, alignItems: "start", justifyContent: "center" }}>
         <MockBoardPanel gameState={gameState} />
         <MockHistoryPanel />
