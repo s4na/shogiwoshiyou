@@ -997,18 +997,18 @@ const MOCK_MOVES = [
 function MockHistoryPanel() {
   const t = useTheme();
   return (
-    <div style={{ overflow: "hidden", width: 150, flexShrink: 0, backgroundColor: t.bg.secondary, borderRadius: R.lg, border: `1px solid ${t.border.subtle}`, boxShadow: t.shadow.sm }}>
-      <div style={{ padding: "6px 10px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: `1px solid ${t.border.subtle}` }}>
-        <span style={{ fontFamily: fG, fontSize: 11, fontWeight: 700, color: t.text.secondary, letterSpacing: "0.04em" }}>棋譜</span>
-        <span style={{ fontFamily: fG, fontSize: 10, color: t.text.tertiary, fontVariantNumeric: "tabular-nums" }}>{MOCK_MOVES.length}手</span>
+    <div style={{ overflow: "hidden", width: 150, flexShrink: 0 }}>
+      <div style={{ padding: "4px 8px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <span style={{ fontFamily: fG, fontSize: 10, fontWeight: 600, color: t.text.tertiary, letterSpacing: "0.04em" }}>棋譜</span>
+        <span style={{ fontFamily: fG, fontSize: 9, color: t.text.tertiary, fontVariantNumeric: "tabular-nums" }}>{MOCK_MOVES.length}手</span>
       </div>
       <div style={{ padding: "4px 8px" }}>
         <ol style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 1, maxHeight: 280, overflowY: "auto" }}>
           {MOCK_MOVES.map((m) => (
-            <li key={m.ply} style={{ display: "flex", alignItems: "center", gap: 6, padding: "3px 6px", borderRadius: R.sm, backgroundColor: m.ply===MOCK_MOVES.length ? t.accent.goldDim : "transparent" }}>
-              <span style={{ fontFamily: fG, fontSize: 9, color: t.text.tertiary, fontVariantNumeric: "tabular-nums", flexShrink: 0, minWidth: 18 }}>{m.ply}</span>
-              <span title={m.usi} style={{ fontFamily: fS, fontSize: 12, color: t.text.primary, letterSpacing: "0.02em" }}>
-                <span style={{ color: m.ply % 2 === 1 ? t.text.primary : t.text.secondary }}>{m.ply % 2 === 1 ? "▲" : "△"}</span>
+            <li key={m.ply} style={{ display: "flex", alignItems: "center", gap: 6, padding: "2px 4px", borderRadius: R.sm, backgroundColor: m.ply===MOCK_MOVES.length ? t.accent.goldDim : "transparent" }}>
+              <span style={{ fontFamily: fG, fontSize: 8, color: t.text.tertiary, fontVariantNumeric: "tabular-nums", flexShrink: 0, minWidth: 16 }}>{m.ply}</span>
+              <span title={m.usi} style={{ fontFamily: fS, fontSize: 11, color: t.text.tertiary, letterSpacing: "0.02em" }}>
+                <span style={{ color: m.ply % 2 === 1 ? t.text.secondary : t.text.tertiary }}>{m.ply % 2 === 1 ? "▲" : "△"}</span>
                 {m.notation}
               </span>
             </li>
