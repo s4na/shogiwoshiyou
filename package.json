@@ -21,7 +21,7 @@
   "dependencies": {
     "@hono/zod-validator": "0.7.5",
     "@preact/signals": "2.9.1",
-    "hono": "4.12.23",
+    "hono": "4.12.34",
     "preact": "10.29.2",
     "tsshogi": "2.3.3",
     "zod": "4.4.3"
